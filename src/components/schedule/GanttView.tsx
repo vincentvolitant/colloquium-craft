@@ -83,8 +83,8 @@ export function GanttView({ events, rooms }: GanttViewProps) {
   
   const getDegreeColor = (degree: string) => {
     return degree === 'MA' 
-      ? 'bg-primary/80 hover:bg-primary' 
-      : 'bg-secondary hover:bg-secondary/80';
+      ? 'bg-primary/80 hover:bg-primary text-primary-foreground' 
+      : 'bg-secondary hover:bg-secondary/80 text-secondary-foreground';
   };
   
   if (events.length === 0) {
@@ -153,10 +153,10 @@ export function GanttView({ events, rooms }: GanttViewProps) {
                           minWidth: '40px',
                         }}
                       >
-                        <div className="font-medium truncate text-primary-foreground">
+                        <div className="font-medium truncate">
                           {exam.studentName}
                         </div>
-                        <div className="truncate text-primary-foreground/80 text-[10px]">
+                        <div className="truncate opacity-80 text-[10px]">
                           {event.startTime} - {event.endTime}
                         </div>
                       </div>
