@@ -324,6 +324,7 @@ export function generateSchedule(
   }
   
   // Sort exams: BA by kompetenzfeld groups, then MA
+  // Shuffle within groups to avoid always filling the same days for same examiners
   const sortedExams = [...exams].sort((a, b) => {
     if (a.degree !== b.degree) return a.degree === 'BA' ? -1 : 1;
     if (a.degree === 'BA' && b.degree === 'BA') {
@@ -343,12 +344,26 @@ export function generateSchedule(
     const triedDays: string[] = [];
     const dayFailureReasons: Map<string, string> = new Map();
     
-    // Try each day, then each room in priority order
+    // Track per-exam statistics for better debugging
+    const examDayStats = new Map<string, { slotsChecked: number; reason: string }>();
     for (const day of config.days) {
+      examDayStats.set(day, { slotsChecked: 0, reason: '' });
+    }
+    
+    // ROUND-ROBIN: Sort days by fewest scheduled exams first for better distribution
+    const sortedDays = [...config.days].sort((a, b) => {
+      const statsA = dayStats.get(a)!;
+      const statsB = dayStats.get(b)!;
+      return statsA.scheduled - statsB.scheduled;
+    });
+    
+    // Try each day in load-balanced order
+    for (const day of sortedDays) {
       if (scheduled) break;
       triedDays.push(day);
       
       const stats = dayStats.get(day)!;
+      const examStats = examDayStats.get(day)!;
       
       // Check examiner availability for this day first
       const examiner1AvailableDay = !examiner1 || isStaffAvailable(examiner1, day, config.startTime, config.endTime, config);
@@ -356,12 +371,14 @@ export function generateSchedule(
       
       if (!examiner1AvailableDay) {
         stats.skippedExaminers++;
-        dayFailureReasons.set(day, `${examiner1?.name || 'Prüfer 1'} nicht verfügbar an diesem Tag`);
+        examStats.reason = `⛔ ${examiner1?.name || 'Prüfer 1'} nicht verfügbar`;
+        dayFailureReasons.set(day, examStats.reason);
         continue; // Try next day
       }
       if (!examiner2AvailableDay) {
         stats.skippedExaminers++;
-        dayFailureReasons.set(day, `${examiner2?.name || 'Prüfer 2'} nicht verfügbar an diesem Tag`);
+        examStats.reason = `⛔ ${examiner2?.name || 'Prüfer 2'} nicht verfügbar`;
+        dayFailureReasons.set(day, examStats.reason);
         continue; // Try next day
       }
       
@@ -378,6 +395,7 @@ export function generateSchedule(
         
         while (currentTime + duration <= endLimit) {
           stats.slotsChecked++;
+          examStats.slotsChecked++;
           const startTime = minutesToTime(currentTime);
           const endTime = addMinutes(startTime, duration);
           const slotKey = `${day}-${roomName}-${startTime}`;
@@ -546,20 +564,23 @@ export function generateSchedule(
         }
       }
       
-      if (!foundSlotOnDay && !dayFailureReasons.has(day)) {
-        dayFailureReasons.set(day, 'Keine freien Zeitslots oder Protokollanten');
+      if (!foundSlotOnDay && !examStats.reason) {
+        examStats.reason = 'Keine freien Slots/Protokollanten';
+        dayFailureReasons.set(day, examStats.reason);
+      } else if (!foundSlotOnDay && !dayFailureReasons.has(day)) {
+        dayFailureReasons.set(day, examStats.reason || 'Keine freien Zeitslots oder Protokollanten');
       }
     }
     
     if (!scheduled) {
-      // Build detailed failure message with day statistics
-      const triedDaysInfo = triedDays.map(d => {
-        const stats = dayStats.get(d);
-        const reason = dayFailureReasons.get(d) || 'unbekannter Grund';
-        if (reason.includes('nicht verfügbar an diesem Tag')) {
-          return `${d}: ⛔ ${reason} (0 Slots geprüft)`;
+      // Build detailed failure message with PER-EXAM day statistics
+      const triedDaysInfo = config.days.map(d => {
+        const examStats = examDayStats.get(d);
+        const reason = examStats?.reason || dayFailureReasons.get(d) || 'nicht versucht';
+        if (reason.includes('nicht verfügbar')) {
+          return `${d}: ${reason}`;
         }
-        return `${d}: ${reason} (${stats?.slotsChecked || 0} Slots geprüft)`;
+        return `${d}: ${reason} (${examStats?.slotsChecked || 0} Slots geprüft)`;
       }).join('; ');
       
       const message = `Prüfung für ${exam.studentName} konnte nicht geplant werden. ${triedDaysInfo}`;
