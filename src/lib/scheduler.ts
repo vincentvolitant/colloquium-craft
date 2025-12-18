@@ -143,32 +143,73 @@ function getRoomsForExam(
   roomMappings: RoomMapping[],
   staff: StaffMember[]
 ): string[] {
-  // For MA or BA with "Integratives Design" - use Prüfer 1's competence field rooms
-  if (exam.degree === 'MA' || 
-      (exam.degree === 'BA' && exam.kompetenzfeld?.toLowerCase().includes('integratives design'))) {
+  const allRooms = roomMappings.flatMap(m => m.rooms);
+  
+  // For MA - prefer Prüfer 1's competence field rooms, but allow ALL rooms as fallback
+  // This ensures MA exams can be scheduled in alternative rooms if primary room is full
+  if (exam.degree === 'MA') {
+    const preferredRooms: string[] = [];
     
     const examiner1 = staff.find(s => s.id === exam.examiner1Id);
     if (examiner1?.primaryCompetenceField) {
       const mapping = roomMappings.find(m => 
         m.kompetenzfeld.toLowerCase() === examiner1.primaryCompetenceField!.toLowerCase()
       );
-      if (mapping) return mapping.rooms;
+      if (mapping) {
+        preferredRooms.push(...mapping.rooms);
+      }
     }
     
-    // Fallback to Prüfer 2
+    // Add Prüfer 2's rooms as secondary preference
     const examiner2 = staff.find(s => s.id === exam.examiner2Id);
     if (examiner2?.primaryCompetenceField) {
       const mapping = roomMappings.find(m => 
         m.kompetenzfeld.toLowerCase() === examiner2.primaryCompetenceField!.toLowerCase()
       );
-      if (mapping) return mapping.rooms;
+      if (mapping) {
+        for (const room of mapping.rooms) {
+          if (!preferredRooms.includes(room)) {
+            preferredRooms.push(room);
+          }
+        }
+      }
     }
     
-    // Fallback to any available room
-    return roomMappings.flatMap(m => m.rooms);
+    // Add ALL other rooms as fallback options for MA
+    for (const room of allRooms) {
+      if (!preferredRooms.includes(room)) {
+        preferredRooms.push(room);
+      }
+    }
+    
+    return preferredRooms.length > 0 ? preferredRooms : allRooms;
   }
   
-  // Regular BA - use kompetenzfeld mapping
+  // BA with "Integratives Design" - same logic as MA
+  if (exam.degree === 'BA' && exam.kompetenzfeld?.toLowerCase().includes('integratives design')) {
+    const preferredRooms: string[] = [];
+    
+    const examiner1 = staff.find(s => s.id === exam.examiner1Id);
+    if (examiner1?.primaryCompetenceField) {
+      const mapping = roomMappings.find(m => 
+        m.kompetenzfeld.toLowerCase() === examiner1.primaryCompetenceField!.toLowerCase()
+      );
+      if (mapping) {
+        preferredRooms.push(...mapping.rooms);
+      }
+    }
+    
+    // Add all other rooms as fallback
+    for (const room of allRooms) {
+      if (!preferredRooms.includes(room)) {
+        preferredRooms.push(room);
+      }
+    }
+    
+    return preferredRooms.length > 0 ? preferredRooms : allRooms;
+  }
+  
+  // Regular BA - use kompetenzfeld mapping strictly (no alternative rooms)
   if (exam.kompetenzfeld) {
     const mapping = roomMappings.find(m => 
       m.kompetenzfeld.toLowerCase() === exam.kompetenzfeld!.toLowerCase()
@@ -176,7 +217,7 @@ function getRoomsForExam(
     if (mapping) return mapping.rooms;
   }
   
-  return roomMappings.flatMap(m => m.rooms);
+  return allRooms;
 }
 
 function selectBestProtocolist(
