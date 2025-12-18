@@ -334,26 +334,28 @@ export function generateSchedule(
     const examiner2 = staff.find(s => s.id === exam.examiner2Id);
     
     let scheduled = false;
-    let unavailabilityReason: { staffName: string; day: string } | null = null;
+    const triedDays: string[] = [];
+    const dayFailureReasons: Map<string, string> = new Map();
     
     // Try each day, then each room in priority order
     for (const day of config.days) {
       if (scheduled) break;
+      triedDays.push(day);
       
       // Check examiner availability for this day first
       const examiner1AvailableDay = !examiner1 || isStaffAvailable(examiner1, day, config.startTime, config.endTime, config);
       const examiner2AvailableDay = !examiner2 || isStaffAvailable(examiner2, day, config.startTime, config.endTime, config);
       
       if (!examiner1AvailableDay) {
-        unavailabilityReason = { staffName: examiner1?.name || 'Prüfer 1', day };
-      }
-      if (!examiner2AvailableDay) {
-        unavailabilityReason = { staffName: examiner2?.name || 'Prüfer 2', day };
-      }
-      
-      if (!examiner1AvailableDay || !examiner2AvailableDay) {
+        dayFailureReasons.set(day, `${examiner1?.name || 'Prüfer 1'} nicht verfügbar`);
         continue; // Try next day
       }
+      if (!examiner2AvailableDay) {
+        dayFailureReasons.set(day, `${examiner2?.name || 'Prüfer 2'} nicht verfügbar`);
+        continue; // Try next day
+      }
+      
+      let foundSlotOnDay = false;
       
       for (const roomName of allowedRooms) {
         if (scheduled) break;
@@ -477,19 +479,25 @@ export function generateSchedule(
           protocolAssignment.dayAssignments.set(day, dayAssignments);
           
           scheduled = true;
+          foundSlotOnDay = true;
           break;
         }
+      }
+      
+      if (!foundSlotOnDay && !dayFailureReasons.has(day)) {
+        dayFailureReasons.set(day, 'Keine freien Zeitslots oder Protokollanten');
       }
     }
     
     if (!scheduled) {
-      let message = `Prüfung für ${exam.studentName} konnte nicht geplant werden`;
-      let suggestion = 'Fügen Sie mehr Tage, Räume hinzu oder prüfen Sie die Verfügbarkeit der Mitarbeiter';
+      // Build detailed failure message
+      const triedDaysInfo = triedDays.map(d => {
+        const reason = dayFailureReasons.get(d) || 'unbekannter Grund';
+        return `${d}: ${reason}`;
+      }).join('; ');
       
-      if (unavailabilityReason) {
-        message = `Prüfung für ${exam.studentName}: ${unavailabilityReason.staffName} ist am ${unavailabilityReason.day} nicht verfügbar`;
-        suggestion = `Passen Sie die Verfügbarkeit von ${unavailabilityReason.staffName} an oder fügen Sie weitere Prüfungstage hinzu`;
-      }
+      const message = `Prüfung für ${exam.studentName} konnte nicht geplant werden. Versuchte Tage: ${triedDaysInfo}`;
+      const suggestion = 'Prüfen Sie die Verfügbarkeit der Prüfer an allen Tagen oder fügen Sie weitere Tage/Räume hinzu';
       
       conflicts.push({
         type: 'availability',
@@ -497,7 +505,6 @@ export function generateSchedule(
         message,
         affectedExamId: exam.id,
         affectedStaffId: examiner1?.id || examiner2?.id,
-        affectedStaffName: unavailabilityReason?.staffName,
         suggestion,
       });
     }
