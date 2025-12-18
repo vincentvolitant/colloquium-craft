@@ -2,13 +2,14 @@ import { Link } from 'react-router-dom';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { AdminAuthGate } from '@/components/admin/AdminAuthGate';
 import { ExcelUploadWizard } from '@/components/admin/ExcelUploadWizard';
+import { StaffAvailabilityPanel } from '@/components/admin/StaffAvailabilityPanel';
 import { ScheduleConfigPanel } from '@/components/admin/ScheduleConfigPanel';
 import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPanel';
 import { ExportPanel } from '@/components/admin/ExportPanel';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Home, LogOut, Upload, Settings, Play, Download, Users, GraduationCap, ExternalLink } from 'lucide-react';
+import { Home, LogOut, Users, GraduationCap, ExternalLink, Calendar, Settings, Play, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
@@ -18,7 +19,8 @@ export default function AdminPage() {
     staff, 
     setExams, 
     addExams, 
-    setStaff, 
+    addOrUpdateStaff,
+    setStaff,
     logoutAdmin,
   } = useScheduleStore();
   const { toast } = useToast();
@@ -35,11 +37,11 @@ export default function AdminPage() {
   
   const handleStaffImport = (data: Exam[] | StaffMember[], warnings: string[]) => {
     const newStaff = data as StaffMember[];
-    setStaff([...staff, ...newStaff]);
+    addOrUpdateStaff(newStaff, false); // Don't reset availability
     
     toast({
-      title: 'Mitarbeiter importiert',
-      description: `${newStaff.length} Mitarbeiter wurden hinzugefügt.${warnings.length > 0 ? ` ${warnings.length} Warnung(en).` : ''}`,
+      title: 'Mitarbeitende importiert',
+      description: `${newStaff.length} Mitarbeitende wurden hinzugefügt/aktualisiert.${warnings.length > 0 ? ` ${warnings.length} Warnung(en).` : ''}`,
     });
   };
   
@@ -54,7 +56,7 @@ export default function AdminPage() {
   const handleClearStaff = () => {
     setStaff([]);
     toast({
-      title: 'Mitarbeiter gelöscht',
+      title: 'Mitarbeitende gelöscht',
       description: 'Alle Mitarbeiterdaten wurden entfernt.',
     });
   };
@@ -85,7 +87,7 @@ export default function AdminPage() {
                   </Badge>
                   <Badge variant="outline" className="gap-1">
                     <Users className="h-3 w-3" />
-                    {staff.length} Mitarbeiter
+                    {staff.length} Mitarbeitende
                   </Badge>
                 </div>
                 <Link to="/" target="_blank">
@@ -104,76 +106,100 @@ export default function AdminPage() {
         </header>
         
         <main className="container py-6">
-          <Tabs defaultValue="upload" className="space-y-6">
+          <Tabs defaultValue="staff" className="space-y-6">
             <TabsList className="w-full justify-start flex-wrap h-auto gap-2 bg-transparent p-0">
-              <TabsTrigger value="upload" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Upload className="h-4 w-4" />
-                Daten importieren
+              <TabsTrigger value="staff" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">1</span>
+                <Users className="h-4 w-4" />
+                Mitarbeitende
+              </TabsTrigger>
+              <TabsTrigger value="availability" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">2</span>
+                <Calendar className="h-4 w-4" />
+                Verfügbarkeiten
+              </TabsTrigger>
+              <TabsTrigger value="exams" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">3</span>
+                <GraduationCap className="h-4 w-4" />
+                Prüfungen
               </TabsTrigger>
               <TabsTrigger value="config" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">4</span>
                 <Settings className="h-4 w-4" />
-                Konfiguration
+                Räume & Tage
               </TabsTrigger>
               <TabsTrigger value="generate" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">5</span>
                 <Play className="h-4 w-4" />
-                Plan erstellen
+                Generieren
               </TabsTrigger>
               <TabsTrigger value="export" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">6</span>
                 <Download className="h-4 w-4" />
                 Export
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="upload" className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <GraduationCap className="h-5 w-5" />
-                      Prüfungen
-                    </h2>
-                    {exams.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleClearExams}>
-                        Alle löschen
-                      </Button>
-                    )}
-                  </div>
-                  <ExcelUploadWizard 
-                    type="exams" 
-                    onComplete={handleExamsImport}
-                    existingStaff={staff}
-                  />
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      Mitarbeiter
-                    </h2>
-                    {staff.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleClearStaff}>
-                        Alle löschen
-                      </Button>
-                    )}
-                  </div>
-                  <ExcelUploadWizard 
-                    type="staff" 
-                    onComplete={handleStaffImport}
-                  />
-                </div>
+            {/* Step 1: Import Staff */}
+            <TabsContent value="staff" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Schritt 1: Mitarbeitende importieren</h2>
+                {staff.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={handleClearStaff}>
+                    Alle löschen
+                  </Button>
+                )}
               </div>
+              <p className="text-sm text-muted-foreground">
+                Laden Sie eine Excel-Datei mit Mitarbeiterdaten hoch. Erforderliche Spalten: Name, Beschäftigungsart (Intern/Extern/Lehrbeauftragt), Primäres Kompetenzfeld.
+              </p>
+              <ExcelUploadWizard 
+                type="staff" 
+                onComplete={handleStaffImport}
+              />
             </TabsContent>
             
+            {/* Step 2: Availability */}
+            <TabsContent value="availability">
+              <h2 className="text-lg font-semibold mb-4">Schritt 2: Verfügbarkeiten pflegen</h2>
+              <StaffAvailabilityPanel />
+            </TabsContent>
+            
+            {/* Step 3: Import Exams */}
+            <TabsContent value="exams" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Schritt 3: Prüfungen importieren</h2>
+                {exams.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={handleClearExams}>
+                    Alle löschen
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Laden Sie Excel-Dateien mit Prüfungsdaten hoch. Die Prüfer müssen in der Mitarbeiterliste vorhanden sein.
+              </p>
+              <ExcelUploadWizard 
+                type="exams" 
+                onComplete={handleExamsImport}
+                existingStaff={staff}
+              />
+            </TabsContent>
+            
+            {/* Step 4: Config */}
             <TabsContent value="config">
+              <h2 className="text-lg font-semibold mb-4">Schritt 4: Räume & Tage konfigurieren</h2>
               <ScheduleConfigPanel />
             </TabsContent>
             
+            {/* Step 5: Generate */}
             <TabsContent value="generate">
+              <h2 className="text-lg font-semibold mb-4">Schritt 5: Plan generieren</h2>
               <ScheduleGeneratorPanel />
             </TabsContent>
             
+            {/* Step 6: Export */}
             <TabsContent value="export">
+              <h2 className="text-lg font-semibold mb-4">Schritt 6: Export & Veröffentlichung</h2>
               <ExportPanel />
             </TabsContent>
           </Tabs>

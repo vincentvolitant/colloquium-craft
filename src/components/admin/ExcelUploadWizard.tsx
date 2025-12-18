@@ -345,7 +345,7 @@ export function ExcelUploadWizard({ type, onComplete, existingStaff }: ExcelUplo
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Name *</Label>
+                  <Label>Name (inkl. Titel) *</Label>
                   <Select 
                     value={staffMapping.name || '__none__'} 
                     onValueChange={(v) => setStaffMapping({...staffMapping, name: v === '__none__' ? undefined : v})}
@@ -363,46 +363,66 @@ export function ExcelUploadWizard({ type, onComplete, existingStaff }: ExcelUplo
                 </div>
                 
                 <div className="space-y-2">
-                  <Label>Kompetenzfelder</Label>
-                  <Select 
-                    value={staffMapping.competenceFields || '__none__'} 
-                    onValueChange={(v) => setStaffMapping({...staffMapping, competenceFields: v === '__none__' ? undefined : v})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Spalte wählen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
-                      {selectedSheet.headers.map(h => (
-                        <SelectItem key={h} value={h}>{h}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Verfügbarkeit / Einschränkungen</Label>
-                  <Select 
-                    value={staffMapping.availability || '__none__'} 
-                    onValueChange={(v) => setStaffMapping({...staffMapping, availability: v === '__none__' ? undefined : v})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Spalte wählen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
-                      {selectedSheet.headers.map(h => (
-                        <SelectItem key={h} value={h}>{h}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Anstellungsart (Intern/Extern)</Label>
+                  <Label>Beschäftigungsart *</Label>
                   <Select 
                     value={staffMapping.employmentType || '__none__'} 
                     onValueChange={(v) => setStaffMapping({...staffMapping, employmentType: v === '__none__' ? undefined : v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Spalte wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
+                      {selectedSheet.headers.map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Intern / Extern / Lehrbeauftragt</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Primäres Kompetenzfeld *</Label>
+                  <Select 
+                    value={staffMapping.primaryCompetenceField || '__none__'} 
+                    onValueChange={(v) => setStaffMapping({...staffMapping, primaryCompetenceField: v === '__none__' ? undefined : v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Spalte wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
+                      {selectedSheet.headers.map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Sekundäre Kompetenzfelder</Label>
+                  <Select 
+                    value={staffMapping.secondaryCompetenceFields || '__none__'} 
+                    onValueChange={(v) => setStaffMapping({...staffMapping, secondaryCompetenceFields: v === '__none__' ? undefined : v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Spalte wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
+                      {selectedSheet.headers.map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Komma-getrennte Liste</p>
+                </div>
+                
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Hinweise</Label>
+                  <Select 
+                    value={staffMapping.notes || '__none__'} 
+                    onValueChange={(v) => setStaffMapping({...staffMapping, notes: v === '__none__' ? undefined : v})}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Spalte wählen" />

@@ -7,7 +7,7 @@ import type {
   ConflictReport,
   Degree 
 } from '@/types';
-import { SLOT_DURATIONS } from '@/types';
+import { SLOT_DURATIONS, canBeProtocolist } from '@/types';
 
 interface TimeSlot {
   startTime: string;
@@ -65,41 +65,70 @@ function generateTimeSlots(
   return slots;
 }
 
+/**
+ * Check if staff is available at a specific day and time slot
+ * Uses the new UI-based availability system:
+ * - Default: everyone is available 09:00-18:00 on all planning days
+ * - Overrides from availabilityOverride take precedence
+ */
 function isStaffAvailable(
   staff: StaffMember,
   day: string,
   startTime: string,
-  endTime: string
+  endTime: string,
+  config: ScheduleConfig
 ): boolean {
-  if (staff.availabilityConstraints.length === 0) return true;
+  const override = staff.availabilityOverride;
+  const slotStart = timeToMinutes(startTime);
+  const slotEnd = timeToMinutes(endTime);
   
-  const dayOfWeek = new Date(day).toLocaleDateString('en-US', { weekday: 'long' });
-  const startMins = timeToMinutes(startTime);
-  const endMins = timeToMinutes(endTime);
+  // No override means fully available (default rule)
+  if (!override) {
+    return true;
+  }
   
-  for (const constraint of staff.availabilityConstraints) {
-    if (constraint.type === 'unavailable') {
-      if (constraint.day && constraint.day.toLowerCase() === dayOfWeek.toLowerCase()) {
-        return false;
-      }
-    }
+  // Check day availability
+  if (override.availableDays && override.availableDays.length > 0) {
+    // Staff is only available on specific days
+    const dayIndex = config.days.indexOf(day);
+    const dayIndexStr = String(dayIndex + 1); // "1", "2", "3"
     
-    if (constraint.type === 'available' && constraint.day) {
-      if (constraint.day.toLowerCase() !== dayOfWeek.toLowerCase()) {
-        return false;
-      }
-    }
+    const isAvailableDay = override.availableDays.some(d => 
+      d === day || // Exact date match
+      d === dayIndexStr // Day index match
+    );
     
-    if (constraint.startTime && constraint.endTime) {
-      const constraintStart = timeToMinutes(constraint.startTime);
-      const constraintEnd = timeToMinutes(constraint.endTime);
+    if (!isAvailableDay) {
+      return false;
+    }
+  }
+  
+  // Check time windows for this specific day
+  if (override.timeWindows && override.timeWindows[day]) {
+    const windows = override.timeWindows[day];
+    if (windows.length > 0) {
+      // Staff is only available during specific windows
+      const isInWindow = windows.some(window => {
+        const windowStart = timeToMinutes(window.startTime);
+        const windowEnd = timeToMinutes(window.endTime);
+        return slotStart >= windowStart && slotEnd <= windowEnd;
+      });
       
-      if (constraint.type === 'available') {
-        if (startMins < constraintStart || endMins > constraintEnd) {
-          return false;
-        }
-      } else {
-        if (startMins >= constraintStart && endMins <= constraintEnd) {
+      if (!isInWindow) {
+        return false;
+      }
+    }
+  }
+  
+  // Check unavailable blocks
+  if (override.unavailableBlocks) {
+    for (const block of override.unavailableBlocks) {
+      if (block.date === day) {
+        const blockStart = timeToMinutes(block.startTime);
+        const blockEnd = timeToMinutes(block.endTime);
+        
+        // Check if slot overlaps with unavailable block
+        if (slotStart < blockEnd && slotEnd > blockStart) {
           return false;
         }
       }
@@ -305,10 +334,26 @@ export function generateSchedule(
     const examiner2 = staff.find(s => s.id === exam.examiner2Id);
     
     let scheduled = false;
+    let unavailabilityReason: { staffName: string; day: string } | null = null;
     
     // Try each day, then each room in priority order
     for (const day of config.days) {
       if (scheduled) break;
+      
+      // Check examiner availability for this day first
+      const examiner1AvailableDay = !examiner1 || isStaffAvailable(examiner1, day, config.startTime, config.endTime, config);
+      const examiner2AvailableDay = !examiner2 || isStaffAvailable(examiner2, day, config.startTime, config.endTime, config);
+      
+      if (!examiner1AvailableDay) {
+        unavailabilityReason = { staffName: examiner1?.name || 'Prüfer 1', day };
+      }
+      if (!examiner2AvailableDay) {
+        unavailabilityReason = { staffName: examiner2?.name || 'Prüfer 2', day };
+      }
+      
+      if (!examiner1AvailableDay || !examiner2AvailableDay) {
+        continue; // Try next day
+      }
       
       for (const roomName of allowedRooms) {
         if (scheduled) break;
@@ -340,9 +385,9 @@ export function generateSchedule(
             continue;
           }
           
-          // Check examiner availability
-          const examiner1Available = !examiner1 || isStaffAvailable(examiner1, day, startTime, endTime);
-          const examiner2Available = !examiner2 || isStaffAvailable(examiner2, day, startTime, endTime);
+          // Check examiner availability for this specific slot
+          const examiner1Available = !examiner1 || isStaffAvailable(examiner1, day, startTime, endTime, config);
+          const examiner2Available = !examiner2 || isStaffAvailable(examiner2, day, startTime, endTime, config);
           
           if (!examiner1Available || !examiner2Available) {
             currentTime += duration;
@@ -367,12 +412,12 @@ export function generateSchedule(
             continue;
           }
           
-          // Find protocolist
+          // Find protocolist - HARD RULE: only internal staff can be protocolists
           const eligibleProtocolists = staff.filter(s => {
-            if (!s.canProtocol) return false;
-            if (s.employmentType !== 'internal') return false;
+            // Use the canBeProtocolist helper which enforces the employment type rule
+            if (!canBeProtocolist(s)) return false;
             if (s.id === exam.examiner1Id || s.id === exam.examiner2Id) return false;
-            if (!isStaffAvailable(s, day, startTime, endTime)) return false;
+            if (!isStaffAvailable(s, day, startTime, endTime, config)) return false;
             
             // Check if already assigned at this time
             const alreadyBusy = events.some(e => {
@@ -438,12 +483,22 @@ export function generateSchedule(
     }
     
     if (!scheduled) {
+      let message = `Prüfung für ${exam.studentName} konnte nicht geplant werden`;
+      let suggestion = 'Fügen Sie mehr Tage, Räume hinzu oder prüfen Sie die Verfügbarkeit der Mitarbeiter';
+      
+      if (unavailabilityReason) {
+        message = `Prüfung für ${exam.studentName}: ${unavailabilityReason.staffName} ist am ${unavailabilityReason.day} nicht verfügbar`;
+        suggestion = `Passen Sie die Verfügbarkeit von ${unavailabilityReason.staffName} an oder fügen Sie weitere Prüfungstage hinzu`;
+      }
+      
       conflicts.push({
-        type: 'constraint',
+        type: 'availability',
         severity: 'error',
-        message: `Could not schedule exam for ${exam.studentName}`,
+        message,
         affectedExamId: exam.id,
-        suggestion: 'Add more days, rooms, or check staff availability constraints',
+        affectedStaffId: examiner1?.id || examiner2?.id,
+        affectedStaffName: unavailabilityReason?.staffName,
+        suggestion,
       });
     }
   }
@@ -463,8 +518,8 @@ export function generateSchedule(
       conflicts.push({
         type: 'constraint',
         severity: 'warning',
-        message: `Protocol workload imbalance: ${minCount} to ${maxCount} assignments per person`,
-        suggestion: 'Consider adjusting availability or adding more eligible protocolists',
+        message: `Protokoll-Arbeitslast unausgeglichen: ${minCount} bis ${maxCount} Zuweisungen pro Person`,
+        suggestion: 'Passen Sie die Verfügbarkeit an oder fügen Sie mehr Protokollanten hinzu',
       });
     }
   }

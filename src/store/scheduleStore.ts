@@ -8,7 +8,8 @@ import type {
   ScheduledEvent, 
   ScheduleConfig,
   ScheduleVersion,
-  ConflictReport 
+  ConflictReport,
+  AvailabilityOverride
 } from '@/types';
 
 interface ScheduleState {
@@ -30,6 +31,8 @@ interface ScheduleState {
   setExams: (exams: Exam[]) => void;
   addExams: (exams: Exam[]) => void;
   setStaff: (staff: StaffMember[]) => void;
+  addOrUpdateStaff: (newStaff: StaffMember[], resetAvailability?: boolean) => void;
+  updateStaffAvailability: (staffId: string, override: AvailabilityOverride | undefined) => void;
   setRooms: (rooms: Room[]) => void;
   setRoomMappings: (mappings: RoomMapping[]) => void;
   updateRoomMapping: (mapping: RoomMapping) => void;
@@ -83,6 +86,36 @@ export const useScheduleStore = create<ScheduleState>()(
         exams: [...state.exams, ...newExams] 
       })),
       setStaff: (staff) => set({ staff }),
+      // Add or update staff with deduplication based on normalized name
+      addOrUpdateStaff: (newStaff, resetAvailability = false) => set((state) => {
+        const normalizedName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+        const existingMap = new Map(state.staff.map(s => [normalizedName(s.name), s]));
+        
+        for (const newMember of newStaff) {
+          const key = normalizedName(newMember.name);
+          const existing = existingMap.get(key);
+          
+          if (existing) {
+            // Update existing staff, preserve availability unless reset requested
+            existingMap.set(key, {
+              ...existing,
+              ...newMember,
+              id: existing.id, // Keep original ID
+              availabilityOverride: resetAvailability ? undefined : existing.availabilityOverride,
+            });
+          } else {
+            // Add new staff
+            existingMap.set(key, newMember);
+          }
+        }
+        
+        return { staff: Array.from(existingMap.values()) };
+      }),
+      updateStaffAvailability: (staffId, override) => set((state) => ({
+        staff: state.staff.map(s => 
+          s.id === staffId ? { ...s, availabilityOverride: override } : s
+        )
+      })),
       setRooms: (rooms) => set({ rooms }),
       setRoomMappings: (mappings) => set({ roomMappings: mappings }),
       updateRoomMapping: (mapping) => set((state) => ({

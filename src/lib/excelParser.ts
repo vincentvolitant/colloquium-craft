@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { Exam, StaffMember, Degree, AvailabilityConstraint, EmploymentType } from '@/types';
+import type { Exam, StaffMember, Degree, EmploymentType } from '@/types';
 
 export interface ParsedSheet {
   name: string;
@@ -19,13 +19,13 @@ export interface ExamColumnMapping {
   notes?: string;
 }
 
+// New simplified staff mapping - only master data, no availability
 export interface StaffColumnMapping {
   name?: string;
-  competenceFields?: string;
-  availability?: string;
   employmentType?: string;
-  canProtocol?: string;
-  canExamine?: string;
+  primaryCompetenceField?: string;
+  secondaryCompetenceFields?: string;
+  notes?: string;
 }
 
 export async function parseExcelFile(file: File): Promise<ParsedSheet[]> {
@@ -129,40 +129,39 @@ export function autoDetectStaffMapping(headers: string[]): StaffColumnMapping {
   const mapping: StaffColumnMapping = {};
   const lowerHeaders = headers.map(h => h.toLowerCase());
   
-  // Name
-  const namePatterns = ['name', 'dozent', 'mitarbeiter', 'person'];
+  // Name (inkl. Titel)
+  const namePatterns = ['name', 'dozent', 'mitarbeiter', 'person', 'titel'];
   mapping.name = headers.find((_, i) => 
     namePatterns.some(p => lowerHeaders[i].includes(p))
   );
   
-  // Competence fields
-  const kfPatterns = ['kompetenzfeld', 'competence', 'feld', 'bereich'];
-  mapping.competenceFields = headers.find((_, i) => 
-    kfPatterns.some(p => lowerHeaders[i].includes(p))
-  );
-  
-  // Availability
-  const availPatterns = ['verfügbar', 'availability', 'zeit', 'restriction', 'einschränkung'];
-  mapping.availability = headers.find((_, i) => 
-    availPatterns.some(p => lowerHeaders[i].includes(p))
-  );
-  
-  // Employment type
-  const employmentPatterns = ['status', 'employment', 'anstellung', 'typ', 'type', 'extern'];
+  // Beschäftigungsart (Intern / Extern / Lehrbeauftragt)
+  const employmentPatterns = ['beschäftigungsart', 'status', 'employment', 'anstellung', 'typ', 'type', 'extern', 'art'];
   mapping.employmentType = headers.find((_, i) => 
     employmentPatterns.some(p => lowerHeaders[i].includes(p))
   );
   
-  // Can protocol
-  const protocolPatterns = ['protokoll', 'protocol'];
-  mapping.canProtocol = headers.find((_, i) => 
-    protocolPatterns.some(p => lowerHeaders[i].includes(p))
+  // Primäres Kompetenzfeld
+  const primaryKfPatterns = ['primär', 'primary', 'haupt'];
+  const kfPatterns = ['kompetenzfeld', 'competence', 'feld', 'bereich'];
+  mapping.primaryCompetenceField = headers.find((_, i) => 
+    primaryKfPatterns.some(p => lowerHeaders[i].includes(p)) &&
+    kfPatterns.some(p => lowerHeaders[i].includes(p))
+  ) || headers.find((_, i) => 
+    kfPatterns.some(p => lowerHeaders[i].includes(p)) && !lowerHeaders[i].includes('sekundär')
   );
   
-  // Can examine
-  const examinePatterns = ['prüfen', 'examine', 'prüfer'];
-  mapping.canExamine = headers.find((_, i) => 
-    examinePatterns.some(p => lowerHeaders[i].includes(p))
+  // Sekundäre Kompetenzfelder
+  const secondaryKfPatterns = ['sekundär', 'secondary', 'weitere', 'other'];
+  mapping.secondaryCompetenceFields = headers.find((_, i) => 
+    secondaryKfPatterns.some(p => lowerHeaders[i].includes(p)) ||
+    (kfPatterns.some(p => lowerHeaders[i].includes(p)) && lowerHeaders[i].includes('sekundär'))
+  );
+  
+  // Hinweise/Notes
+  const notesPatterns = ['hinweis', 'note', 'bemerkung', 'comment', 'anmerkung'];
+  mapping.notes = headers.find((_, i) => 
+    notesPatterns.some(p => lowerHeaders[i].includes(p))
   );
   
   return mapping;
@@ -285,62 +284,7 @@ export function parseExams(
   return { exams, warnings };
 }
 
-export function parseAvailabilityText(text: string): AvailabilityConstraint[] {
-  const constraints: AvailabilityConstraint[] = [];
-  if (!text) return constraints;
-  
-  const lowerText = text.toLowerCase();
-  
-  // German day names
-  const dayMap: Record<string, string> = {
-    'montag': 'Monday', 'mo': 'Monday',
-    'dienstag': 'Tuesday', 'di': 'Tuesday',
-    'mittwoch': 'Wednesday', 'mi': 'Wednesday',
-    'donnerstag': 'Thursday', 'do': 'Thursday',
-    'freitag': 'Friday', 'fr': 'Friday',
-  };
-  
-  // Check for "nur" (only) patterns
-  const nurMatch = lowerText.match(/nur\s+(\w+)/);
-  if (nurMatch) {
-    const day = dayMap[nurMatch[1]] || nurMatch[1];
-    constraints.push({ type: 'available', day });
-  }
-  
-  // Check for "nicht" (not) patterns
-  const nichtMatch = lowerText.match(/nicht\s+(\w+)/);
-  if (nichtMatch) {
-    const day = dayMap[nichtMatch[1]] || nichtMatch[1];
-    constraints.push({ type: 'unavailable', day });
-  }
-  
-  // Check for time ranges like "ab 12 Uhr" or "09-13"
-  const timeRangeMatch = lowerText.match(/ab\s+(\d{1,2})\s*(?:uhr|:)?/);
-  if (timeRangeMatch) {
-    const startHour = parseInt(timeRangeMatch[1]);
-    constraints.push({ 
-      type: 'available', 
-      startTime: `${startHour.toString().padStart(2, '0')}:00`,
-      endTime: '18:00'
-    });
-  }
-  
-  const rangeMatch = lowerText.match(/(\d{1,2})(?::(\d{2}))?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?/);
-  if (rangeMatch) {
-    const startHour = rangeMatch[1].padStart(2, '0');
-    const startMin = rangeMatch[2] || '00';
-    const endHour = rangeMatch[3].padStart(2, '0');
-    const endMin = rangeMatch[4] || '00';
-    constraints.push({ 
-      type: 'available', 
-      startTime: `${startHour}:${startMin}`,
-      endTime: `${endHour}:${endMin}`
-    });
-  }
-  
-  return constraints;
-}
-
+// Simplified staff parsing - only master data, no availability
 export function parseStaff(
   data: Record<string, unknown>[],
   mapping: StaffColumnMapping
@@ -357,16 +301,7 @@ export function parseStaff(
       continue;
     }
     
-    // Parse competence fields (comma-separated)
-    const kfRaw = mapping.competenceFields ? String(row[mapping.competenceFields] || '') : '';
-    const competenceFields = kfRaw.split(/[,;]/).map(f => f.trim()).filter(Boolean);
-    const primaryCompetenceField = competenceFields[0] || null;
-    
-    // Parse availability
-    const availabilityRaw = mapping.availability ? String(row[mapping.availability] || '') : '';
-    const availabilityConstraints = parseAvailabilityText(availabilityRaw);
-    
-    // Parse employment type
+    // Parse employment type (Beschäftigungsart)
     let employmentType: EmploymentType = 'internal';
     if (mapping.employmentType && row[mapping.employmentType]) {
       const empVal = String(row[mapping.employmentType]).toLowerCase();
@@ -377,38 +312,44 @@ export function parseStaff(
       }
     }
     
-    // Parse can_protocol - externals/adjuncts cannot protocol
-    let canProtocol = employmentType === 'internal';
-    if (mapping.canProtocol && row[mapping.canProtocol]) {
-      const protVal = String(row[mapping.canProtocol]).toLowerCase();
-      if (protVal.includes('nein') || protVal.includes('no') || protVal.includes('n')) {
-        canProtocol = false;
-      }
-    }
-    // Check for "kein Protokoll" in availability text
-    if (availabilityRaw.toLowerCase().includes('kein protokoll')) {
-      canProtocol = false;
-    }
+    // Parse primary competence field
+    const primaryKfRaw = mapping.primaryCompetenceField 
+      ? String(row[mapping.primaryCompetenceField] || '').trim() 
+      : '';
+    const primaryCompetenceField = primaryKfRaw || null;
     
-    // Parse can_examine
-    let canExamine = true;
-    if (mapping.canExamine && row[mapping.canExamine]) {
-      const examVal = String(row[mapping.canExamine]).toLowerCase();
-      if (examVal.includes('nein') || examVal.includes('no') || examVal.includes('n')) {
-        canExamine = false;
-      }
-    }
+    // Parse secondary competence fields (comma-separated)
+    const secondaryKfRaw = mapping.secondaryCompetenceFields 
+      ? String(row[mapping.secondaryCompetenceFields] || '') 
+      : '';
+    const secondaryCompetenceFields = secondaryKfRaw
+      .split(/[,;]/)
+      .map(f => f.trim())
+      .filter(Boolean);
+    
+    // Build competence fields array
+    const competenceFields = primaryCompetenceField 
+      ? [primaryCompetenceField, ...secondaryCompetenceFields]
+      : secondaryCompetenceFields;
+    
+    // Parse notes
+    const notes = mapping.notes ? String(row[mapping.notes] || '').trim() : undefined;
+    
+    // canProtocol is derived from employmentType: only internal can protocol
+    // External and adjunct can NEVER be protocolists (hard rule)
+    const canProtocol = employmentType === 'internal';
     
     staff.push({
       id: crypto.randomUUID(),
       name,
       competenceFields,
       primaryCompetenceField,
-      canExamine,
+      secondaryCompetenceFields,
+      canExamine: true, // All staff can examine
       canProtocol,
       employmentType,
-      availabilityConstraints,
-      availabilityRaw,
+      notes,
+      // No availabilityOverride - will be set via UI
     });
   }
   
@@ -502,9 +443,10 @@ export function exportScheduleToCSV(
     e.event.status,
   ]);
   
-  const csvContent = [headers, ...rows]
-    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+  const csvContent = [
+    headers.join(';'),
+    ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+  ].join('\n');
   
   return csvContent;
 }

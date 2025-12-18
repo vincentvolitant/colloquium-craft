@@ -19,23 +19,50 @@ export interface Exam {
   notes?: string;
 }
 
+// Time window for availability
+export interface TimeWindow {
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+}
+
+// UI-defined availability constraint
+export interface AvailabilityOverride {
+  id: string;
+  // Day constraint - if set, staff is ONLY available on these days
+  availableDays?: string[]; // Array of YYYY-MM-DD or day indices like "1", "2", "3"
+  // Time windows per day - if set, staff is ONLY available during these windows
+  timeWindows?: Record<string, TimeWindow[]>; // day (YYYY-MM-DD) -> time windows
+  // Unavailable blocks - specific date+time ranges when NOT available
+  unavailableBlocks?: Array<{
+    date: string; // YYYY-MM-DD
+    startTime: string; // HH:mm
+    endTime: string; // HH:mm
+  }>;
+  // Notes for admin
+  notes?: string;
+}
+
 export interface StaffMember {
   id: string;
   name: string;
   competenceFields: string[];
   primaryCompetenceField: string | null;
+  secondaryCompetenceFields?: string[];
   canExamine: boolean;
-  canProtocol: boolean;
+  canProtocol: boolean; // Derived from employmentType: only internal can protocol
   employmentType: EmploymentType;
-  availabilityConstraints: AvailabilityConstraint[];
-  availabilityRaw?: string; // Original text from Excel
+  // UI-defined availability (replaces old availabilityConstraints)
+  availabilityOverride?: AvailabilityOverride;
+  // Admin notes
+  notes?: string;
 }
 
+// Legacy type - kept for compatibility during migration
 export interface AvailabilityConstraint {
   type: 'available' | 'unavailable';
-  day?: string; // Day name or 'all'
-  startTime?: string; // HH:mm
-  endTime?: string; // HH:mm
+  day?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface Room {
@@ -85,6 +112,7 @@ export interface ConflictReport {
   message: string;
   affectedExamId?: string;
   affectedStaffId?: string;
+  affectedStaffName?: string;
   suggestion?: string;
 }
 
@@ -110,3 +138,15 @@ export const SLOT_DURATIONS: Record<Degree, number> = {
   BA: 50,
   MA: 75,
 };
+
+// Employment type labels (German)
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  internal: 'Intern',
+  external: 'Extern',
+  adjunct: 'Lehrbeauftragt',
+};
+
+// Helper to check if staff can be assigned as protocolist
+export function canBeProtocolist(staff: StaffMember): boolean {
+  return staff.employmentType === 'internal' && staff.canProtocol;
+}
