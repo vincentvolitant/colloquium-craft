@@ -298,8 +298,19 @@ export function generateSchedule(
           const endTime = addMinutes(startTime, duration);
           const slotKey = `${day}-${roomName}-${startTime}`;
           
-          if (usedSlots.has(slotKey)) {
-            currentTime += duration;
+          // Check for room conflicts (with 10 minute buffer)
+          const roomConflict = events.some(e => {
+            if (e.dayDate !== day || e.room !== roomName) return false;
+            const existingStart = timeToMinutes(e.startTime);
+            const existingEnd = timeToMinutes(e.endTime);
+            const newStart = currentTime;
+            const newEnd = currentTime + duration;
+            // Must have at least 10 minutes gap
+            return !(newEnd + 10 <= existingStart || newStart >= existingEnd + 10);
+          });
+          
+          if (usedSlots.has(slotKey) || roomConflict) {
+            currentTime += 5; // Try 5 minute increments to find gaps
             continue;
           }
           
