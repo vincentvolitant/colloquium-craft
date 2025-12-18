@@ -412,10 +412,10 @@ export function generateSchedule(
     examinerLoadMap.set(exam.examiner2Id, (examinerLoadMap.get(exam.examiner2Id) || 0) + 1);
   }
   
-  // Sort exams: BA first, then by examiner load (highest first), then by kompetenzfeld
+  // Sort exams: MA first (to prioritize on early days), then by examiner load (highest first), then by kompetenzfeld
   const sortedExams = [...exams].sort((a, b) => {
-    // BA before MA
-    if (a.degree !== b.degree) return a.degree === 'BA' ? -1 : 1;
+    // MA before BA - Master exams get priority for early days
+    if (a.degree !== b.degree) return a.degree === 'MA' ? -1 : 1;
     
     // Within same degree: sort by combined examiner load (higher load = schedule first)
     const loadA = (examinerLoadMap.get(a.examiner1Id) || 0) + (examinerLoadMap.get(a.examiner2Id) || 0);
@@ -446,11 +446,29 @@ export function generateSchedule(
       examDayStats.set(day, { slotsChecked: 0, reason: '' });
     }
     
-    // ROUND-ROBIN: Sort days by fewest scheduled exams first for better distribution
+    // Get days where examiners are already scheduled (to minimize their attendance days)
+    const examiner1Assignment = assignments.get(exam.examiner1Id);
+    const examiner2Assignment = assignments.get(exam.examiner2Id);
+    
+    // Sort days: prefer days where examiners are already present, then prefer early days
     const sortedDays = [...config.days].sort((a, b) => {
-      const statsA = dayStats.get(a)!;
-      const statsB = dayStats.get(b)!;
-      return statsA.scheduled - statsB.scheduled;
+      const indexA = config.days.indexOf(a);
+      const indexB = config.days.indexOf(b);
+      
+      // 1. Prüfer-Präsenz: Bevorzuge Tage wo Prüfer schon eingeteilt sind
+      const examiner1HasA = examiner1Assignment?.dayAssignments.has(a) ? 1 : 0;
+      const examiner1HasB = examiner1Assignment?.dayAssignments.has(b) ? 1 : 0;
+      const examiner2HasA = examiner2Assignment?.dayAssignments.has(a) ? 1 : 0;
+      const examiner2HasB = examiner2Assignment?.dayAssignments.has(b) ? 1 : 0;
+      
+      const presenceA = examiner1HasA + examiner2HasA; // 0, 1 oder 2
+      const presenceB = examiner1HasB + examiner2HasB;
+      
+      // Höhere Präsenz = besser (kommt zuerst)
+      if (presenceA !== presenceB) return presenceB - presenceA;
+      
+      // 2. Bei gleicher Präsenz: frühe Tage bevorzugen (Frontloading Tag 1 & 2)
+      return indexA - indexB;
     });
     
     // Try each day in load-balanced order
