@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2, MapPin, ChevronDown, X } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, MapPin, ChevronDown, X, GraduationCap, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { Room, RoomMapping } from '@/types';
+import { SLOT_DURATIONS } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,12 +26,44 @@ export function ScheduleConfigPanel() {
     config.days.map(d => new Date(d))
   );
   
-  // Get unique kompetenzfelder from exams
-  const kompetenzfelder = [...new Set(
+  // Get unique kompetenzfelder from exams (BA only, excluding Integratives Design)
+  const regularKompetenzfelder = [...new Set(
     exams
-      .filter(e => e.degree === 'BA' && e.kompetenzfeld)
+      .filter(e => e.degree === 'BA' && e.kompetenzfeld && !e.kompetenzfeld.toLowerCase().includes('integrativ'))
       .map(e => e.kompetenzfeld!)
-  )].filter(kf => kf.toLowerCase() !== 'integratives design').sort();
+  )].sort();
+  
+  // Check if there are Integratives Design exams
+  const integrativesDesignExams = exams.filter(
+    e => e.degree === 'BA' && e.kompetenzfeld?.toLowerCase().includes('integrativ')
+  );
+  
+  // Master exams
+  const masterExams = exams.filter(e => e.degree === 'MA');
+  
+  // Count exams per kompetenzfeld
+  const getExamCount = (kf: string): number => {
+    if (kf === '__MASTER__') return masterExams.length;
+    if (kf === '__INTEGRATIVES__') return integrativesDesignExams.length;
+    return exams.filter(e => e.kompetenzfeld === kf).length;
+  };
+  
+  // Calculate estimated time needed (in minutes)
+  const getEstimatedTime = (kf: string): number => {
+    if (kf === '__MASTER__') return masterExams.length * SLOT_DURATIONS.MA;
+    if (kf === '__INTEGRATIVES__') return integrativesDesignExams.length * SLOT_DURATIONS.BA;
+    const count = exams.filter(e => e.kompetenzfeld === kf).length;
+    return count * SLOT_DURATIONS.BA;
+  };
+  
+  // Format time as hours and minutes
+  const formatTime = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours === 0) return `${mins} Min.`;
+    if (mins === 0) return `${hours} Std.`;
+    return `${hours} Std. ${mins} Min.`;
+  };
   
   const handleAddRoom = () => {
     if (!newRoomName.trim()) return;
@@ -205,18 +238,23 @@ export function ScheduleConfigPanel() {
       </Card>
       
       {/* Room Mapping */}
-      {rooms.length > 0 && kompetenzfelder.length > 0 && (
+      {rooms.length > 0 && (exams.length > 0) && (
         <Card className="border-2">
           <CardHeader>
-            <CardTitle>Raum-Zuordnung nach Kompetenzfeld</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5" />
+              Prüfungen & Raum-Zuordnung
+            </CardTitle>
             <CardDescription>
-              Ordnen Sie Räume den Kompetenzfeldern zu (Mehrfachauswahl möglich).
-              "Integratives Design" und Master folgen automatisch dem Prüfer 1.
+              Übersicht aller Prüfungen nach Kompetenzfeld. Ordnen Sie Räume zu (Mehrfachauswahl möglich).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {kompetenzfelder.map((kf) => {
+            {/* Regular BA Kompetenzfelder */}
+            {regularKompetenzfelder.map((kf) => {
               const selectedRooms = getRoomsForKompetenzfeld(kf);
+              const examCount = getExamCount(kf);
+              const estimatedTime = getEstimatedTime(kf);
               
               const toggleRoom = (roomName: string) => {
                 const newSelection = selectedRooms.includes(roomName)
@@ -230,15 +268,25 @@ export function ScheduleConfigPanel() {
               };
               
               return (
-                <div key={kf} className="space-y-2">
+                <div key={kf} className="border-2 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="default">BA</Badge>
+                      <span className="font-semibold">{kf}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{examCount} Prüfungen</span>
+                      <span>≈ {formatTime(estimatedTime)}</span>
+                    </div>
+                  </div>
+                  
                   <div className="flex items-center gap-4">
-                    <Label className="w-48 font-medium shrink-0">{kf}</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="justify-between min-w-[200px]">
                           {selectedRooms.length === 0 
                             ? 'Räume auswählen...' 
-                            : `${selectedRooms.length} Raum/Räume ausgewählt`}
+                            : `${selectedRooms.length} Raum/Räume`}
                           <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -259,30 +307,80 @@ export function ScheduleConfigPanel() {
                         </div>
                       </PopoverContent>
                     </Popover>
-                  </div>
-                  
-                  {selectedRooms.length > 0 && (
-                    <div className="flex flex-wrap gap-1 ml-52">
-                      {selectedRooms.map((roomName) => (
-                        <Badge 
-                          key={roomName} 
-                          variant="secondary"
-                          className="gap-1 pr-1"
-                        >
-                          {roomName}
-                          <button
-                            onClick={() => removeRoom(roomName)}
-                            className="ml-1 hover:bg-accent rounded-sm p-0.5"
+                    
+                    {selectedRooms.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedRooms.map((roomName) => (
+                          <Badge 
+                            key={roomName} 
+                            variant="secondary"
+                            className="gap-1 pr-1"
                           >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                            {roomName}
+                            <button
+                              onClick={() => removeRoom(roomName)}
+                              className="ml-1 hover:bg-accent rounded-sm p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {selectedRooms.length === 0 && (
+                      <span className="text-sm text-destructive">Bitte Räume zuordnen</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
+            
+            {/* Integratives Design */}
+            {integrativesDesignExams.length > 0 && (
+              <div className="border-2 border-dashed p-4 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="default">BA</Badge>
+                    <span className="font-semibold">Integratives Design</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{integrativesDesignExams.length} Prüfungen</span>
+                    <span>≈ {formatTime(getEstimatedTime('__INTEGRATIVES__'))}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  <span>Raum folgt automatisch dem Kompetenzfeld von Prüfer 1</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Master */}
+            {masterExams.length > 0 && (
+              <div className="border-2 border-dashed p-4 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="secondary">MA</Badge>
+                    <span className="font-semibold">Master</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{masterExams.length} Prüfungen</span>
+                    <span>≈ {formatTime(getEstimatedTime('__MASTER__'))}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Info className="h-4 w-4" />
+                  <span>Raum folgt automatisch dem Kompetenzfeld von Prüfer 1</span>
+                </div>
+              </div>
+            )}
+            
+            {regularKompetenzfelder.length === 0 && integrativesDesignExams.length === 0 && masterExams.length === 0 && (
+              <p className="text-muted-foreground text-center py-4">
+                Noch keine Prüfungen importiert.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
