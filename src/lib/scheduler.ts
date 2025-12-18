@@ -154,9 +154,18 @@ function selectBestProtocolist(
   eligibleStaff: StaffMember[],
   assignments: Map<string, StaffAssignment>,
   exam: Exam,
-  day: string
+  day: string,
+  allStaff: StaffMember[]
 ): StaffMember | null {
   if (eligibleStaff.length === 0) return null;
+  
+  // Calculate average load for balancing
+  const allLoads = Array.from(assignments.values()).map(a => 
+    a.examIds.length + a.protocolIds.length
+  );
+  const avgLoad = allLoads.length > 0 
+    ? allLoads.reduce((sum, l) => sum + l, 0) / allLoads.length 
+    : 0;
   
   // Score each candidate
   const scored = eligibleStaff.map(staff => {
@@ -180,15 +189,32 @@ function selectBestProtocolist(
       f.toLowerCase() === exam.kompetenzfeld?.toLowerCase()
     ) ? -1 : 0;
     
-    // Score: lower is better
+    // Score: lower is better - prioritize balanced distribution
     let score = 0;
-    score += protocolCount * 2; // Penalize high protocol count
-    score += supervisionCount; // Penalize high supervision (less than protocol)
-    score += isNewDay && totalLoad > 0 ? 3 : 0; // Penalize adding new days
-    score += daysAssigned * 0.5; // Slight penalty for spread across days
+    
+    // Primary factor: total load compared to average (balance across all staff)
+    score += (totalLoad - avgLoad) * 3;
+    
+    // Prefer staff with fewer protocol assignments
+    score += protocolCount * 1.5;
+    
+    // Small bonus for staff with few exam supervisions (they can take more protocols)
+    if (supervisionCount < 3) {
+      score -= 2;
+    }
+    
+    // Penalize adding new days only if they already have significant load
+    if (isNewDay && totalLoad > 2) {
+      score += 2;
+    }
+    
+    // Slight penalty for spread across many days
+    score += daysAssigned * 0.3;
+    
+    // Competence field match bonus
     score += sameFieldBonus;
     
-    return { staff, score };
+    return { staff, score, totalLoad };
   });
   
   scored.sort((a, b) => a.score - b.score);
@@ -363,7 +389,7 @@ export function generateSchedule(
             return !alreadyBusy;
           });
           
-          const protocolist = selectBestProtocolist(eligibleProtocolists, assignments, exam, day);
+          const protocolist = selectBestProtocolist(eligibleProtocolists, assignments, exam, day, staff);
           
           if (!protocolist) {
             // Try next slot
