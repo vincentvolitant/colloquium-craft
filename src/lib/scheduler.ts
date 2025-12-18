@@ -396,9 +396,17 @@ export function generateSchedule(
             continue;
           }
           
-          // Check examiner conflicts (already scheduled at same time)
+          // Check examiner conflicts (already scheduled with time overlap)
           const hasConflict = events.some(e => {
-            if (e.dayDate !== day || e.startTime !== startTime) return false;
+            if (e.dayDate !== day) return false;
+            // Check for actual time overlap
+            const existingStart = timeToMinutes(e.startTime);
+            const existingEnd = timeToMinutes(e.endTime);
+            const newStart = currentTime;
+            const newEnd = currentTime + duration;
+            // No overlap if new ends before existing starts, or new starts after existing ends
+            if (newEnd <= existingStart || newStart >= existingEnd) return false;
+            
             const otherExam = exams.find(ex => ex.id === e.examId);
             if (!otherExam) return false;
             return (
@@ -434,9 +442,17 @@ export function generateSchedule(
               return false;
             }
             
-            // Check if already assigned at this time
+            // Check if already assigned at this time (with proper time overlap check)
             const alreadyBusy = events.some(e => {
-              if (e.dayDate !== day || e.startTime !== startTime) return false;
+              if (e.dayDate !== day) return false;
+              // Check for actual time overlap
+              const existingStart = timeToMinutes(e.startTime);
+              const existingEnd = timeToMinutes(e.endTime);
+              const newStart = currentTime;
+              const newEnd = currentTime + duration;
+              // No overlap if new ends before existing starts, or new starts after existing ends
+              if (newEnd <= existingStart || newStart >= existingEnd) return false;
+              
               const otherExam = exams.find(ex => ex.id === e.examId);
               if (!otherExam) return false;
               
