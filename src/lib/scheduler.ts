@@ -291,39 +291,72 @@ function selectBestProtocolist(
   return scored[0]?.staff || null;
 }
 
+// Constants for break rule
+const BREAK_DURATION = 45; // Minutes of break needed after 4 consecutive exams
+const MAX_CONSECUTIVE = 4; // Max consecutive exams before break
+const CONSECUTIVE_GAP_TOLERANCE = 5; // Minutes gap to still count as consecutive
+
 function checkBreakRule(
   staffId: string,
   scheduledEvents: ScheduledEvent[],
   newSlot: TimeSlot,
   exams: Exam[]
 ): boolean {
-  // Check if adding this slot would violate the 4-consecutive rule
+  // Get all events for this staff member on the same day
   const staffEvents = scheduledEvents.filter(e => {
     const exam = exams.find(ex => ex.id === e.examId);
-    if (!exam) return false;
+    if (!exam || e.dayDate !== newSlot.day) return false;
     return (
-      e.dayDate === newSlot.day &&
-      (exam.examiner1Id === staffId || exam.examiner2Id === staffId || e.protocolistId === staffId)
+      exam.examiner1Id === staffId || 
+      exam.examiner2Id === staffId || 
+      e.protocolistId === staffId
     );
   });
   
   // Sort by time
   staffEvents.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
   
-  // Check for 4+ consecutive
-  let consecutive = 0;
-  let lastEndTime = '';
+  const newStart = timeToMinutes(newSlot.startTime);
+  
+  // Count consecutive exams BEFORE the new slot
+  let consecutiveCount = 0;
+  let lastEndTime = 0;
   
   for (const event of staffEvents) {
-    if (lastEndTime && event.startTime === lastEndTime) {
-      consecutive++;
-    } else {
-      consecutive = 1;
-    }
-    lastEndTime = event.endTime;
+    const eventStart = timeToMinutes(event.startTime);
+    const eventEnd = timeToMinutes(event.endTime);
     
-    if (consecutive >= 4) return false;
+    // Event is after new slot - not relevant for checking
+    if (eventStart >= newStart) continue;
+    
+    // Check if this event resets or continues the consecutive chain
+    if (lastEndTime > 0 && eventStart - lastEndTime >= BREAK_DURATION) {
+      // Gap of >= 45 min = break taken, reset counter
+      consecutiveCount = 1;
+    } else if (lastEndTime > 0 && eventStart <= lastEndTime + CONSECUTIVE_GAP_TOLERANCE) {
+      // Consecutive (within 5 min gap tolerance)
+      consecutiveCount++;
+    } else {
+      // First event or large gap (but not 45 min)
+      consecutiveCount = 1;
+    }
+    
+    lastEndTime = eventEnd;
   }
+  
+  // If already at 4 consecutive, check if there's enough break before new slot
+  if (consecutiveCount >= MAX_CONSECUTIVE && lastEndTime > 0) {
+    // New slot must start at least 45 min after the last exam
+    if (newStart - lastEndTime < BREAK_DURATION) {
+      return false; // Not allowed, break is too short
+    }
+    // Enough break, counter would reset - allowed
+  }
+  
+  // Also check: would adding this slot create a 5th consecutive?
+  // (the slot itself + 3 before it without break)
+  // Already handled: if we have 4 before with no break, we rejected above
+  // If we have 3 before with no break, adding this makes 4 - that's allowed
   
   return true;
 }
@@ -364,10 +397,25 @@ export function generateSchedule(
     if (a2) a2.examIds.push(exam.id);
   }
   
-  // Sort exams: BA by kompetenzfeld groups, then MA
-  // Shuffle within groups to avoid always filling the same days for same examiners
+  // Calculate examiner load for prioritization
+  // Exams with heavily-loaded examiners should be scheduled first
+  const examinerLoadMap = new Map<string, number>();
+  for (const exam of exams) {
+    examinerLoadMap.set(exam.examiner1Id, (examinerLoadMap.get(exam.examiner1Id) || 0) + 1);
+    examinerLoadMap.set(exam.examiner2Id, (examinerLoadMap.get(exam.examiner2Id) || 0) + 1);
+  }
+  
+  // Sort exams: BA first, then by examiner load (highest first), then by kompetenzfeld
   const sortedExams = [...exams].sort((a, b) => {
+    // BA before MA
     if (a.degree !== b.degree) return a.degree === 'BA' ? -1 : 1;
+    
+    // Within same degree: sort by combined examiner load (higher load = schedule first)
+    const loadA = (examinerLoadMap.get(a.examiner1Id) || 0) + (examinerLoadMap.get(a.examiner2Id) || 0);
+    const loadB = (examinerLoadMap.get(b.examiner1Id) || 0) + (examinerLoadMap.get(b.examiner2Id) || 0);
+    if (loadA !== loadB) return loadB - loadA; // Higher load first
+    
+    // Same load: sort by kompetenzfeld for room grouping
     if (a.degree === 'BA' && b.degree === 'BA') {
       return (a.kompetenzfeld || '').localeCompare(b.kompetenzfeld || '');
     }
@@ -441,15 +489,16 @@ export function generateSchedule(
           const endTime = addMinutes(startTime, duration);
           const slotKey = `${day}-${roomName}-${startTime}`;
           
-          // Check for room conflicts (with 10 minute buffer)
+          // Check for room conflicts (with 5 minute buffer)
+          const ROOM_BUFFER = 5; // Minutes buffer between exams in same room
           const roomConflict = events.some(e => {
             if (e.dayDate !== day || e.room !== roomName) return false;
             const existingStart = timeToMinutes(e.startTime);
             const existingEnd = timeToMinutes(e.endTime);
             const newStart = currentTime;
             const newEnd = currentTime + duration;
-            // Must have at least 10 minutes gap
-            return !(newEnd + 10 <= existingStart || newStart >= existingEnd + 10);
+            // Must have at least 5 minutes gap
+            return !(newEnd + ROOM_BUFFER <= existingStart || newStart >= existingEnd + ROOM_BUFFER);
           });
           
           if (usedSlots.has(slotKey) || roomConflict) {
