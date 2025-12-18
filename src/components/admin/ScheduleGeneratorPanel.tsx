@@ -59,15 +59,40 @@ export function ScheduleGeneratorPanel() {
     // Maximum protocolist capacity = internal staff × slots per day × days
     const maxProtocolistCapacity = internalStaff.length * slotsPerRoomPerDay * config.days.length;
     
-    // Find staff who are heavily involved as examiners
-    const examinerCounts = new Map<string, number>();
+    // Detailed examiner workload analysis
+    const examinerCounts = new Map<string, { total: number; perDay: Map<string, number> }>();
     for (const exam of exams) {
-      examinerCounts.set(exam.examiner1Id, (examinerCounts.get(exam.examiner1Id) || 0) + 1);
-      examinerCounts.set(exam.examiner2Id, (examinerCounts.get(exam.examiner2Id) || 0) + 1);
+      // Examiner 1
+      if (!examinerCounts.has(exam.examiner1Id)) {
+        examinerCounts.set(exam.examiner1Id, { total: 0, perDay: new Map() });
+      }
+      examinerCounts.get(exam.examiner1Id)!.total++;
+      
+      // Examiner 2
+      if (!examinerCounts.has(exam.examiner2Id)) {
+        examinerCounts.set(exam.examiner2Id, { total: 0, perDay: new Map() });
+      }
+      examinerCounts.get(exam.examiner2Id)!.total++;
+    }
+    
+    // Calculate max exams per day per room (theoretical)
+    const maxExamsPerDayTotal = slotsPerRoomPerDay * config.rooms.length;
+    
+    // Find overloaded examiners (more exams than can fit in available days)
+    const overloadedExaminers: { staff: typeof staff[0]; total: number; maxPossible: number }[] = [];
+    for (const s of staff) {
+      const count = examinerCounts.get(s.id);
+      if (count) {
+        // An examiner can only do 1 exam per slot, so max = slots per day * days
+        const maxPossibleForExaminer = slotsPerRoomPerDay * config.days.length;
+        if (count.total > maxPossibleForExaminer) {
+          overloadedExaminers.push({ staff: s, total: count.total, maxPossible: maxPossibleForExaminer });
+        }
+      }
     }
     
     const heavyExaminers = internalStaff.filter(s => {
-      const count = examinerCounts.get(s.id) || 0;
+      const count = examinerCounts.get(s.id)?.total || 0;
       return count > slotsPerRoomPerDay; // More exams than slots per day
     });
     
@@ -83,7 +108,12 @@ export function ScheduleGeneratorPanel() {
       warnings.push(`Protokollanten-Kapazität kritisch: ${exams.length} Prüfungen, max. ${maxProtocolistCapacity} Protokoll-Einsätze möglich`);
     }
     
-    if (heavyExaminers.length > 0) {
+    // Add overloaded examiner warnings
+    for (const ol of overloadedExaminers) {
+      warnings.push(`⚠️ ${ol.staff.name}: ${ol.total} Prüfungen, aber max. ${ol.maxPossible} möglich (${slotsPerRoomPerDay} Slots/Tag × ${config.days.length} Tage)`);
+    }
+    
+    if (heavyExaminers.length > 0 && overloadedExaminers.length === 0) {
       const names = heavyExaminers.slice(0, 3).map(s => s.name).join(', ');
       const suffix = heavyExaminers.length > 3 ? ` (+${heavyExaminers.length - 3} weitere)` : '';
       warnings.push(`Hohe Prüfer-Auslastung: ${names}${suffix} - reduziert Protokollanten-Verfügbarkeit`);
@@ -94,8 +124,10 @@ export function ScheduleGeneratorPanel() {
       externalCount: externalStaff.length,
       totalSlots,
       maxProtocolistCapacity,
+      maxExamsPerDayTotal,
       slotsPerRoomPerDay,
       heavyExaminers,
+      overloadedExaminers,
       warnings,
       isCapacityCritical: warnings.length > 0,
     };
