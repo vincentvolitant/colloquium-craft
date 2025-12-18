@@ -3,9 +3,11 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { ExamCard } from '@/components/schedule/ExamCard';
 import { ScheduleFilters } from '@/components/schedule/ScheduleFilters';
 import { DaySelector } from '@/components/schedule/DaySelector';
+import { GanttView } from '@/components/schedule/GanttView';
 import { Button } from '@/components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Link } from 'react-router-dom';
-import { Settings, FileSpreadsheet } from 'lucide-react';
+import { Settings, FileSpreadsheet, LayoutGrid, GanttChart } from 'lucide-react';
 import type { Degree, ScheduledEvent, Exam } from '@/types';
 import { KOMPETENZFELD_MASTER_LABEL } from '@/types';
 
@@ -17,6 +19,9 @@ export function PublicScheduleView() {
   const events = publishedVersion 
     ? scheduledEvents.filter(e => e.scheduleVersionId === publishedVersion.id)
     : [];
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<'cards' | 'gantt'>('cards');
   
   // Filter state
   const [search, setSearch] = useState('');
@@ -146,6 +151,18 @@ export function PublicScheduleView() {
     return grouped;
   }, [filteredEvents, exams]);
   
+  // Prepare data for Gantt view
+  const ganttEvents = useMemo(() => {
+    return filteredEvents.map(event => {
+      const exam = exams.find(e => e.id === event.examId);
+      return exam ? { event, exam } : null;
+    }).filter(Boolean) as Array<{ event: ScheduledEvent; exam: Exam }>;
+  }, [filteredEvents, exams]);
+  
+  const ganttRooms = useMemo(() => {
+    return [...new Set(filteredEvents.map(e => e.room))].sort();
+  }, [filteredEvents]);
+  
   const activeFilterCount = [
     selectedDegree !== 'all',
     selectedKompetenzfeld !== 'all',
@@ -231,11 +248,27 @@ export function PublicScheduleView() {
               activeFilterCount={activeFilterCount}
             />
             
-            {/* Schedule Grid by Room */}
+            {/* View Toggle */}
+            <div className="flex justify-end">
+              <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as 'cards' | 'gantt')}>
+                <ToggleGroupItem value="cards" aria-label="Kartenansicht">
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Karten
+                </ToggleGroupItem>
+                <ToggleGroupItem value="gantt" aria-label="Gantt-Ansicht">
+                  <GanttChart className="h-4 w-4 mr-2" />
+                  Gantt
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+            
+            {/* Schedule View */}
             {filteredEvents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p>Keine Prüfungen gefunden, die den Filterkriterien entsprechen.</p>
               </div>
+            ) : viewMode === 'gantt' ? (
+              <GanttView events={ganttEvents} rooms={ganttRooms} />
             ) : (
               <div className="space-y-8">
                 {[...eventsByRoom.entries()].map(([room, roomEvents]) => (
