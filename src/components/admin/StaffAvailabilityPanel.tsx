@@ -67,12 +67,41 @@ function EditAvailabilityDialog({ staff, configDays, onSave }: EditDialogProps) 
   const [open, setOpen] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>(staff.availabilityOverride?.availableDays || []);
   const [timeWindows, setTimeWindows] = useState<Record<string, TimeWindow[]>>(staff.availabilityOverride?.timeWindows || {});
+  const [timeWindowInputs, setTimeWindowInputs] = useState<Record<string, string>>(() => {
+    const inputs: Record<string, string> = {};
+    if (staff.availabilityOverride?.timeWindows) {
+      for (const [day, windows] of Object.entries(staff.availabilityOverride.timeWindows)) {
+        if (windows[0]) {
+          inputs[day] = `${windows[0].startTime}-${windows[0].endTime}`;
+        }
+      }
+    }
+    return inputs;
+  });
   const [notes, setNotes] = useState(staff.availabilityOverride?.notes || '');
   
   const handleDayToggle = (day: string) => {
     setSelectedDays(prev => 
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
     );
+  };
+
+  const handleTimeWindowChange = (day: string, value: string) => {
+    setTimeWindowInputs(prev => ({ ...prev, [day]: value }));
+    
+    const match = value.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (match) {
+      setTimeWindows(prev => ({
+        ...prev,
+        [day]: [{ startTime: match[1], endTime: match[2] }]
+      }));
+    } else if (!value.trim()) {
+      setTimeWindows(prev => {
+        const next = { ...prev };
+        delete next[day];
+        return next;
+      });
+    }
   };
   
   const handleSave = () => {
@@ -94,6 +123,7 @@ function EditAvailabilityDialog({ staff, configDays, onSave }: EditDialogProps) 
   const handleReset = () => {
     setSelectedDays([]);
     setTimeWindows({});
+    setTimeWindowInputs({});
     setNotes('');
   };
   
@@ -146,8 +176,7 @@ function EditAvailabilityDialog({ staff, configDays, onSave }: EditDialogProps) 
               <Clock className="h-4 w-4" />
               Zeitfenster pro Tag
             </Label>
-            {configDays.map((day, idx) => {
-              const dayWindows = timeWindows[day] || [];
+            {configDays.map((day) => {
               const dateLabel = format(new Date(day), 'EEE dd.MM', { locale: de });
               
               return (
@@ -156,22 +185,8 @@ function EditAvailabilityDialog({ staff, configDays, onSave }: EditDialogProps) 
                   <Input
                     placeholder="z.B. 09:00-12:00"
                     className="w-32"
-                    value={dayWindows[0]?.startTime ? `${dayWindows[0].startTime}-${dayWindows[0].endTime}` : ''}
-                    onChange={(e) => {
-                      const match = e.target.value.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
-                      if (match) {
-                        setTimeWindows(prev => ({
-                          ...prev,
-                          [day]: [{ startTime: match[1], endTime: match[2] }]
-                        }));
-                      } else if (!e.target.value) {
-                        setTimeWindows(prev => {
-                          const next = { ...prev };
-                          delete next[day];
-                          return next;
-                        });
-                      }
-                    }}
+                    value={timeWindowInputs[day] || ''}
+                    onChange={(e) => handleTimeWindowChange(day, e.target.value)}
                   />
                 </div>
               );
