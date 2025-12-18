@@ -33,12 +33,13 @@ export function PublicScheduleView() {
   const [selectedPublic, setSelectedPublic] = useState<'all' | 'public' | 'private'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'scheduled' | 'cancelled'>('all');
   
-  // Get unique days from events
+  // Get configured days (show all days even if no events are scheduled on a day)
   const days = useMemo(() => {
-    const uniqueDays = [...new Set(events.map(e => e.dayDate))].sort();
-    return uniqueDays;
-  }, [events]);
-  
+    const configuredDays = [...config.days].sort();
+    if (configuredDays.length > 0) return configuredDays;
+    return [...new Set(events.map(e => e.dayDate))].sort();
+  }, [config.days, events]);
+
   // Get unique values for filters
   const kompetenzfelder = useMemo(() => {
     const kfs = new Set<string>();
@@ -270,11 +271,10 @@ export function PublicScheduleView() {
             ) : viewMode === 'gantt' ? (
               <div className="space-y-8">
                 {[...ganttDataByDay.entries()].map(([day, { events: dayEvents, rooms }]) => {
-                  if (dayEvents.length === 0) return null;
                   const date = parseISO(day);
                   const dayName = format(date, 'EEEE', { locale: de });
                   const dateStr = format(date, 'd. MMMM yyyy', { locale: de });
-                  
+
                   return (
                     <section key={day}>
                       <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 flex items-center gap-2">
@@ -284,7 +284,14 @@ export function PublicScheduleView() {
                           ({dayEvents.length} Prüfungen)
                         </span>
                       </h2>
-                      <GanttView events={dayEvents} rooms={rooms} />
+
+                      {dayEvents.length === 0 ? (
+                        <div className="border-2 rounded-md p-6 text-sm text-muted-foreground">
+                          Keine Prüfungen für diesen Tag (oder durch Filter ausgeblendet).
+                        </div>
+                      ) : (
+                        <GanttView events={dayEvents} rooms={rooms} />
+                      )}
                     </section>
                   );
                 })}
@@ -292,12 +299,11 @@ export function PublicScheduleView() {
             ) : (
               <div className="space-y-10">
                 {[...eventsByDayAndRoom.entries()].map(([day, roomMap]) => {
-                  if (roomMap.size === 0) return null;
                   const date = parseISO(day);
                   const dayName = format(date, 'EEEE', { locale: de });
                   const dateStr = format(date, 'd. MMMM yyyy', { locale: de });
                   const totalForDay = [...roomMap.values()].reduce((sum, arr) => sum + arr.length, 0);
-                  
+
                   return (
                     <div key={day}>
                       <h2 className="text-2xl font-bold mb-6 pb-2 border-b-2 flex items-center gap-2">
@@ -307,30 +313,37 @@ export function PublicScheduleView() {
                           ({totalForDay} Prüfungen)
                         </span>
                       </h2>
-                      <div className="space-y-6">
-                        {[...roomMap.entries()].map(([room, roomEvents]) => (
-                          <section key={room}>
-                            <h3 className="text-lg font-semibold mb-3 text-muted-foreground">
-                              {room}
-                              <span className="font-normal ml-2">
-                                ({roomEvents.length} Prüfungen)
-                              </span>
-                            </h3>
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                              {roomEvents.map(({ event, exam }) => (
-                                <ExamCard
-                                  key={event.id}
-                                  exam={exam}
-                                  event={event}
-                                  examiner1={getStaffById(exam.examiner1Id)}
-                                  examiner2={getStaffById(exam.examiner2Id)}
-                                  protocolist={getStaffById(event.protocolistId)}
-                                />
-                              ))}
-                            </div>
-                          </section>
-                        ))}
-                      </div>
+
+                      {totalForDay === 0 ? (
+                        <div className="border-2 rounded-md p-6 text-sm text-muted-foreground">
+                          Keine Prüfungen für diesen Tag (oder durch Filter ausgeblendet).
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {[...roomMap.entries()].map(([room, roomEvents]) => (
+                            <section key={room}>
+                              <h3 className="text-lg font-semibold mb-3 text-muted-foreground">
+                                {room}
+                                <span className="font-normal ml-2">
+                                  ({roomEvents.length} Prüfungen)
+                                </span>
+                              </h3>
+                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {roomEvents.map(({ event, exam }) => (
+                                  <ExamCard
+                                    key={event.id}
+                                    exam={exam}
+                                    event={event}
+                                    examiner1={getStaffById(exam.examiner1Id)}
+                                    examiner2={getStaffById(exam.examiner2Id)}
+                                    protocolist={getStaffById(event.protocolistId)}
+                                  />
+                                ))}
+                              </div>
+                            </section>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
