@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Play, AlertTriangle, CheckCircle, XCircle, RefreshCw, Send } from 'lucide-react';
+import { Play, AlertTriangle, CheckCircle, XCircle, RefreshCw, Send, Users, UserCheck, UserX } from 'lucide-react';
 import { generateSchedule } from '@/lib/scheduler';
 import { useToast } from '@/hooks/use-toast';
 import type { ConflictReport } from '@/types';
+import { canBeProtocolist, SLOT_DURATIONS } from '@/types';
 
 export function ScheduleGeneratorPanel() {
   const { 
@@ -39,6 +40,66 @@ export function ScheduleGeneratorPanel() {
     staff.length > 0 && 
     config.days.length > 0 && 
     config.rooms.length > 0;
+
+  // Capacity analysis
+  const capacityAnalysis = useMemo(() => {
+    const internalStaff = staff.filter(s => canBeProtocolist(s));
+    const externalStaff = staff.filter(s => !canBeProtocolist(s));
+    
+    // Calculate slots per day (rough estimate using BA duration)
+    const startMinutes = parseInt(config.startTime.split(':')[0]) * 60 + parseInt(config.startTime.split(':')[1] || '0');
+    const endMinutes = parseInt(config.endTime.split(':')[0]) * 60 + parseInt(config.endTime.split(':')[1] || '0');
+    const availableMinutes = endMinutes - startMinutes;
+    const avgSlotDuration = (SLOT_DURATIONS.BA + SLOT_DURATIONS.MA) / 2;
+    const slotsPerRoomPerDay = Math.floor(availableMinutes / avgSlotDuration);
+    
+    const totalSlots = slotsPerRoomPerDay * config.rooms.length * config.days.length;
+    
+    // Each exam needs 1 protocolist, but protocolists can do multiple exams (not at same time)
+    // Maximum protocolist capacity = internal staff × slots per day × days
+    const maxProtocolistCapacity = internalStaff.length * slotsPerRoomPerDay * config.days.length;
+    
+    // Find staff who are heavily involved as examiners
+    const examinerCounts = new Map<string, number>();
+    for (const exam of exams) {
+      examinerCounts.set(exam.examiner1Id, (examinerCounts.get(exam.examiner1Id) || 0) + 1);
+      examinerCounts.set(exam.examiner2Id, (examinerCounts.get(exam.examiner2Id) || 0) + 1);
+    }
+    
+    const heavyExaminers = internalStaff.filter(s => {
+      const count = examinerCounts.get(s.id) || 0;
+      return count > slotsPerRoomPerDay; // More exams than slots per day
+    });
+    
+    const warnings: string[] = [];
+    
+    if (exams.length > totalSlots) {
+      warnings.push(`Mehr Prüfungen (${exams.length}) als verfügbare Slots (${totalSlots})`);
+    }
+    
+    if (internalStaff.length === 0) {
+      warnings.push('Keine internen Mitarbeiter - Protokollführung nicht möglich');
+    } else if (exams.length > maxProtocolistCapacity) {
+      warnings.push(`Protokollanten-Kapazität kritisch: ${exams.length} Prüfungen, max. ${maxProtocolistCapacity} Protokoll-Einsätze möglich`);
+    }
+    
+    if (heavyExaminers.length > 0) {
+      const names = heavyExaminers.slice(0, 3).map(s => s.name).join(', ');
+      const suffix = heavyExaminers.length > 3 ? ` (+${heavyExaminers.length - 3} weitere)` : '';
+      warnings.push(`Hohe Prüfer-Auslastung: ${names}${suffix} - reduziert Protokollanten-Verfügbarkeit`);
+    }
+    
+    return {
+      internalCount: internalStaff.length,
+      externalCount: externalStaff.length,
+      totalSlots,
+      maxProtocolistCapacity,
+      slotsPerRoomPerDay,
+      heavyExaminers,
+      warnings,
+      isCapacityCritical: warnings.length > 0,
+    };
+  }, [staff, exams, config]);
   
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -146,6 +207,71 @@ export function ScheduleGeneratorPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* Capacity Analysis */}
+      {staff.length > 0 && (
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Kapazitätsanalyse
+            </CardTitle>
+            <CardDescription>
+              Prüfung der Protokollanten-Verfügbarkeit
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex items-center gap-2 p-3 border-2 rounded">
+                <UserCheck className="h-5 w-5 text-green-600" />
+                <div>
+                  <div className="text-2xl font-bold">{capacityAnalysis.internalCount}</div>
+                  <div className="text-xs text-muted-foreground">Intern (Protokollanten)</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 border-2 rounded">
+                <UserX className="h-5 w-5 text-orange-500" />
+                <div>
+                  <div className="text-2xl font-bold">{capacityAnalysis.externalCount}</div>
+                  <div className="text-xs text-muted-foreground">Extern/Lehrbeauftragt</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 border-2 rounded">
+                <div>
+                  <div className="text-2xl font-bold">{capacityAnalysis.totalSlots}</div>
+                  <div className="text-xs text-muted-foreground">Verfügbare Slots</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 border-2 rounded">
+                <div>
+                  <div className="text-2xl font-bold">{capacityAnalysis.slotsPerRoomPerDay}</div>
+                  <div className="text-xs text-muted-foreground">Slots/Raum/Tag</div>
+                </div>
+              </div>
+            </div>
+            
+            {capacityAnalysis.warnings.length > 0 && (
+              <div className="space-y-2">
+                {capacityAnalysis.warnings.map((warning, i) => (
+                  <Alert key={i} variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{warning}</AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
+            
+            {capacityAnalysis.warnings.length === 0 && (
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Kapazität ausreichend: {capacityAnalysis.internalCount} Protokollanten für {exams.length} Prüfungen
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
       
       {/* Generate Button */}
       <Card className="border-2">
