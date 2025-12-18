@@ -38,6 +38,13 @@ function addMinutes(time: string, minutes: number): string {
   return minutesToTime(timeToMinutes(time) + minutes);
 }
 
+// Helper to check for "Integratives Design" or "Integriertes Design"
+function isIntegrativesDesign(kompetenzfeld: string | null | undefined): boolean {
+  if (!kompetenzfeld) return false;
+  const lower = kompetenzfeld.toLowerCase();
+  return lower.includes('integratives design') || lower.includes('integriertes design');
+}
+
 function generateTimeSlots(
   config: ScheduleConfig,
   degree: Degree
@@ -185,8 +192,8 @@ function getRoomsForExam(
     return preferredRooms.length > 0 ? preferredRooms : allRooms;
   }
   
-  // BA with "Integratives Design" - same logic as MA
-  if (exam.degree === 'BA' && exam.kompetenzfeld?.toLowerCase().includes('integratives design')) {
+  // BA with "Integratives Design" or "Integriertes Design" - same logic as MA
+  if (exam.degree === 'BA' && isIntegrativesDesign(exam.kompetenzfeld)) {
     const preferredRooms: string[] = [];
     
     const examiner1 = staff.find(s => s.id === exam.examiner1Id);
