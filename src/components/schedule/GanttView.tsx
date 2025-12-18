@@ -140,6 +140,8 @@ export function GanttView({ events, rooms }: GanttViewProps) {
               {roomEvents.map(({ event, exam }) => {
                 const position = getEventPosition(event);
                 const examiner1 = getStaffById(exam.examiner1Id);
+                const examiner2 = getStaffById(exam.examiner2Id);
+                const protocolist = getStaffById(event.protocolistId);
                 const isCancelled = event.status === 'cancelled';
                 
                 return (
@@ -180,7 +182,17 @@ export function GanttView({ events, rooms }: GanttViewProps) {
                         </div>
                         {examiner1 && (
                           <div className="text-xs">
-                            <span className="text-muted-foreground">Prüfer:</span> {examiner1.name}
+                            <span className="text-muted-foreground">Prüfer 1:</span> {examiner1.name}
+                          </div>
+                        )}
+                        {examiner2 && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">Prüfer 2:</span> {examiner2.name}
+                          </div>
+                        )}
+                        {protocolist && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">Protokoll:</span> {protocolist.name}
                           </div>
                         )}
                         {isCancelled && (
