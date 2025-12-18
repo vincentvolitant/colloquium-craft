@@ -26,16 +26,23 @@ export function ScheduleConfigPanel() {
     config.days.map(d => new Date(d))
   );
   
-  // Get unique kompetenzfelder from exams (BA only, excluding Integratives Design)
+  // Helper to check for "Integratives/Integriertes Design"
+  const isIntegrativesDesign = (kf: string | null | undefined): boolean => {
+    if (!kf) return false;
+    const lower = kf.toLowerCase();
+    return lower.includes('integrativ') || lower.includes('integriert');
+  };
+  
+  // Get unique kompetenzfelder from exams (BA only, excluding Integratives/Integriertes Design)
   const regularKompetenzfelder = [...new Set(
     exams
-      .filter(e => e.degree === 'BA' && e.kompetenzfeld && !e.kompetenzfeld.toLowerCase().includes('integrativ'))
+      .filter(e => e.degree === 'BA' && e.kompetenzfeld && !isIntegrativesDesign(e.kompetenzfeld))
       .map(e => e.kompetenzfeld!)
   )].sort();
   
-  // Check if there are Integratives Design exams
+  // Check if there are Integratives/Integriertes Design exams
   const integrativesDesignExams = exams.filter(
-    e => e.degree === 'BA' && e.kompetenzfeld?.toLowerCase().includes('integrativ')
+    e => e.degree === 'BA' && isIntegrativesDesign(e.kompetenzfeld)
   );
   
   // Master exams
@@ -342,7 +349,7 @@ export function ScheduleConfigPanel() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Badge variant="default">BA</Badge>
-                    <span className="font-semibold">Integratives Design</span>
+                    <span className="font-semibold">Integriertes Design</span>
                   </div>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">{integrativesDesignExams.length} Prüfungen</span>
