@@ -8,7 +8,7 @@ import { ExportPanel } from '@/components/admin/ExportPanel';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Home, LogOut, Upload, Settings, Play, Download, Users, GraduationCap } from 'lucide-react';
+import { Home, LogOut, Upload, Settings, Play, Download, Users, GraduationCap, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
@@ -88,6 +88,12 @@ export default function AdminPage() {
                     {staff.length} Mitarbeiter
                   </Badge>
                 </div>
+                <Link to="/" target="_blank">
+                  <Button variant="outline" className="gap-2">
+                    <ExternalLink className="h-4 w-4" />
+                    Öffentliche Ansicht
+                  </Button>
+                </Link>
                 <Button variant="ghost" onClick={logoutAdmin} className="gap-2">
                   <LogOut className="h-4 w-4" />
                   Abmelden
