@@ -2,12 +2,13 @@ import { useState, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { ExamCard } from '@/components/schedule/ExamCard';
 import { ScheduleFilters } from '@/components/schedule/ScheduleFilters';
-import { DaySelector } from '@/components/schedule/DaySelector';
 import { GanttView } from '@/components/schedule/GanttView';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Link } from 'react-router-dom';
-import { Settings, FileSpreadsheet, LayoutGrid, GanttChart } from 'lucide-react';
+import { Settings, FileSpreadsheet, LayoutGrid, GanttChart, CalendarDays } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { de } from 'date-fns/locale';
 import type { Degree, ScheduledEvent, Exam } from '@/types';
 import { KOMPETENZFELD_MASTER_LABEL } from '@/types';
 
@@ -37,15 +38,6 @@ export function PublicScheduleView() {
     const uniqueDays = [...new Set(events.map(e => e.dayDate))].sort();
     return uniqueDays;
   }, [events]);
-  
-  const [selectedDay, setSelectedDay] = useState(days[0] || '');
-  
-  // Update selected day when days change
-  useMemo(() => {
-    if (days.length > 0 && !days.includes(selectedDay)) {
-      setSelectedDay(days[0]);
-    }
-  }, [days, selectedDay]);
   
   // Get unique values for filters
   const kompetenzfelder = useMemo(() => {
@@ -81,9 +73,6 @@ export function PublicScheduleView() {
     return events.filter(event => {
       const exam = exams.find(e => e.id === event.examId);
       if (!exam) return false;
-      
-      // Day filter
-      if (selectedDay && event.dayDate !== selectedDay) return false;
       
       // Search filter
       if (search) {
@@ -128,40 +117,58 @@ export function PublicScheduleView() {
       
       return true;
     });
-  }, [events, exams, selectedDay, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminer, selectedPublic, selectedStatus]);
+  }, [events, exams, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminer, selectedPublic, selectedStatus]);
   
-  // Group filtered events by room
-  const eventsByRoom = useMemo(() => {
-    const grouped = new Map<string, Array<{ event: ScheduledEvent; exam: Exam }>>();
+  // Group filtered events by day, then by room
+  const eventsByDayAndRoom = useMemo(() => {
+    const grouped = new Map<string, Map<string, Array<{ event: ScheduledEvent; exam: Exam }>>>();
+    
+    days.forEach(day => {
+      grouped.set(day, new Map());
+    });
     
     filteredEvents.forEach(event => {
       const exam = exams.find(e => e.id === event.examId);
       if (!exam) return;
       
-      const roomEvents = grouped.get(event.room) || [];
+      let dayMap = grouped.get(event.dayDate);
+      if (!dayMap) {
+        dayMap = new Map();
+        grouped.set(event.dayDate, dayMap);
+      }
+      
+      const roomEvents = dayMap.get(event.room) || [];
       roomEvents.push({ event, exam });
-      grouped.set(event.room, roomEvents);
+      dayMap.set(event.room, roomEvents);
     });
     
     // Sort events within each room by time
-    grouped.forEach(roomEvents => {
-      roomEvents.sort((a, b) => a.event.startTime.localeCompare(b.event.startTime));
+    grouped.forEach(dayMap => {
+      dayMap.forEach(roomEvents => {
+        roomEvents.sort((a, b) => a.event.startTime.localeCompare(b.event.startTime));
+      });
     });
     
     return grouped;
-  }, [filteredEvents, exams]);
+  }, [filteredEvents, exams, days]);
   
-  // Prepare data for Gantt view
-  const ganttEvents = useMemo(() => {
-    return filteredEvents.map(event => {
-      const exam = exams.find(e => e.id === event.examId);
-      return exam ? { event, exam } : null;
-    }).filter(Boolean) as Array<{ event: ScheduledEvent; exam: Exam }>;
-  }, [filteredEvents, exams]);
-  
-  const ganttRooms = useMemo(() => {
-    return [...new Set(filteredEvents.map(e => e.room))].sort();
-  }, [filteredEvents]);
+  // Prepare data for Gantt view - grouped by day
+  const ganttDataByDay = useMemo(() => {
+    const grouped = new Map<string, { events: Array<{ event: ScheduledEvent; exam: Exam }>; rooms: string[] }>();
+    
+    days.forEach(day => {
+      const dayEvents = filteredEvents.filter(e => e.dayDate === day);
+      const dayExamEvents = dayEvents.map(event => {
+        const exam = exams.find(e => e.id === event.examId);
+        return exam ? { event, exam } : null;
+      }).filter(Boolean) as Array<{ event: ScheduledEvent; exam: Exam }>;
+      
+      const rooms = [...new Set(dayEvents.map(e => e.room))].sort();
+      grouped.set(day, { events: dayExamEvents, rooms });
+    });
+    
+    return grouped;
+  }, [filteredEvents, exams, days]);
   
   const activeFilterCount = [
     selectedDegree !== 'all',
@@ -217,14 +224,7 @@ export function PublicScheduleView() {
             </p>
           </div>
         ) : (
-          <>
-            {/* Day Selector */}
-            <DaySelector 
-              days={days} 
-              selectedDay={selectedDay} 
-              onDayChange={setSelectedDay} 
-            />
-            
+        <>
             {/* Filters */}
             <ScheduleFilters
               search={search}
@@ -268,31 +268,72 @@ export function PublicScheduleView() {
                 <p>Keine Prüfungen gefunden, die den Filterkriterien entsprechen.</p>
               </div>
             ) : viewMode === 'gantt' ? (
-              <GanttView events={ganttEvents} rooms={ganttRooms} />
-            ) : (
               <div className="space-y-8">
-                {[...eventsByRoom.entries()].map(([room, roomEvents]) => (
-                  <section key={room}>
-                    <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2">
-                      {room}
-                      <span className="text-muted-foreground font-normal ml-2">
-                        ({roomEvents.length} Prüfungen)
-                      </span>
-                    </h2>
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {roomEvents.map(({ event, exam }) => (
-                        <ExamCard
-                          key={event.id}
-                          exam={exam}
-                          event={event}
-                          examiner1={getStaffById(exam.examiner1Id)}
-                          examiner2={getStaffById(exam.examiner2Id)}
-                          protocolist={getStaffById(event.protocolistId)}
-                        />
-                      ))}
+                {[...ganttDataByDay.entries()].map(([day, { events: dayEvents, rooms }]) => {
+                  if (dayEvents.length === 0) return null;
+                  const date = parseISO(day);
+                  const dayName = format(date, 'EEEE', { locale: de });
+                  const dateStr = format(date, 'd. MMMM yyyy', { locale: de });
+                  
+                  return (
+                    <section key={day}>
+                      <h2 className="text-xl font-semibold mb-4 pb-2 border-b-2 flex items-center gap-2">
+                        <CalendarDays className="h-5 w-5" />
+                        {dayName}, {dateStr}
+                        <span className="text-muted-foreground font-normal ml-2">
+                          ({dayEvents.length} Prüfungen)
+                        </span>
+                      </h2>
+                      <GanttView events={dayEvents} rooms={rooms} />
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-10">
+                {[...eventsByDayAndRoom.entries()].map(([day, roomMap]) => {
+                  if (roomMap.size === 0) return null;
+                  const date = parseISO(day);
+                  const dayName = format(date, 'EEEE', { locale: de });
+                  const dateStr = format(date, 'd. MMMM yyyy', { locale: de });
+                  const totalForDay = [...roomMap.values()].reduce((sum, arr) => sum + arr.length, 0);
+                  
+                  return (
+                    <div key={day}>
+                      <h2 className="text-2xl font-bold mb-6 pb-2 border-b-2 flex items-center gap-2">
+                        <CalendarDays className="h-6 w-6" />
+                        {dayName}, {dateStr}
+                        <span className="text-muted-foreground font-normal text-lg ml-2">
+                          ({totalForDay} Prüfungen)
+                        </span>
+                      </h2>
+                      <div className="space-y-6">
+                        {[...roomMap.entries()].map(([room, roomEvents]) => (
+                          <section key={room}>
+                            <h3 className="text-lg font-semibold mb-3 text-muted-foreground">
+                              {room}
+                              <span className="font-normal ml-2">
+                                ({roomEvents.length} Prüfungen)
+                              </span>
+                            </h3>
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                              {roomEvents.map(({ event, exam }) => (
+                                <ExamCard
+                                  key={event.id}
+                                  exam={exam}
+                                  event={event}
+                                  examiner1={getStaffById(exam.examiner1Id)}
+                                  examiner2={getStaffById(exam.examiner2Id)}
+                                  protocolist={getStaffById(event.protocolistId)}
+                                />
+                              ))}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
                     </div>
-                  </section>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
