@@ -222,21 +222,42 @@ export function parseExams(
     const examiner1Name = mapping.examiner1 ? String(row[mapping.examiner1] || '').trim() : '';
     const examiner2Name = mapping.examiner2 ? String(row[mapping.examiner2] || '').trim() : '';
     
-    const findStaffId = (name: string): string => {
+    const findStaffId = (name: string, rowNum: number, examinerNum: number): string => {
       if (!name) return '';
-      if (staffList) {
-        const found = staffList.find(s => 
-          s.name.toLowerCase().includes(name.toLowerCase()) ||
-          name.toLowerCase().includes(s.name.toLowerCase())
+      if (staffList && staffList.length > 0) {
+        // Try exact match first
+        let found = staffList.find(s => 
+          s.name.toLowerCase() === name.toLowerCase()
         );
+        
+        // Try partial match (name contains or is contained)
+        if (!found) {
+          found = staffList.find(s => 
+            s.name.toLowerCase().includes(name.toLowerCase()) ||
+            name.toLowerCase().includes(s.name.toLowerCase())
+          );
+        }
+        
+        // Try matching by last name only
+        if (!found) {
+          const nameParts = name.split(/\s+/);
+          const lastName = nameParts[nameParts.length - 1].toLowerCase();
+          found = staffList.find(s => {
+            const staffParts = s.name.split(/\s+/);
+            const staffLastName = staffParts[staffParts.length - 1].toLowerCase();
+            return staffLastName === lastName;
+          });
+        }
+        
         if (found) return found.id;
+        warnings.push(`Row ${rowNum}: Prüfer ${examinerNum} "${name}" not found in staff list`);
       }
-      // Create ID from name if not found
+      // Create ID from name if not found - this will not match any staff
       return `staff-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     };
     
-    const examiner1Id = findStaffId(examiner1Name);
-    const examiner2Id = findStaffId(examiner2Name);
+    const examiner1Id = findStaffId(examiner1Name, i + 2, 1);
+    const examiner2Id = findStaffId(examiner2Name, i + 2, 2);
     
     // Parse public flag - default is PUBLIC unless explicitly marked as not public
     let isPublic = true;
