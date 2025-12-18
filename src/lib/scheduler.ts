@@ -415,22 +415,40 @@ export function generateSchedule(
           }
           
           // Find protocolist - HARD RULE: only internal staff can be protocolists
+          // Track detailed reasons for failure
+          const internalStaff = staff.filter(s => canBeProtocolist(s));
+          const notExaminerCount = internalStaff.filter(s => 
+            s.id !== exam.examiner1Id && s.id !== exam.examiner2Id
+          ).length;
+          
+          let busyAsExaminer = 0;
+          let busyAsProtocolist = 0;
+          let notAvailable = 0;
+          
           const eligibleProtocolists = staff.filter(s => {
             // Use the canBeProtocolist helper which enforces the employment type rule
             if (!canBeProtocolist(s)) return false;
             if (s.id === exam.examiner1Id || s.id === exam.examiner2Id) return false;
-            if (!isStaffAvailable(s, day, startTime, endTime, config)) return false;
+            if (!isStaffAvailable(s, day, startTime, endTime, config)) {
+              notAvailable++;
+              return false;
+            }
             
             // Check if already assigned at this time
             const alreadyBusy = events.some(e => {
               if (e.dayDate !== day || e.startTime !== startTime) return false;
               const otherExam = exams.find(ex => ex.id === e.examId);
               if (!otherExam) return false;
-              return (
-                e.protocolistId === s.id ||
-                otherExam.examiner1Id === s.id ||
-                otherExam.examiner2Id === s.id
-              );
+              
+              if (e.protocolistId === s.id) {
+                busyAsProtocolist++;
+                return true;
+              }
+              if (otherExam.examiner1Id === s.id || otherExam.examiner2Id === s.id) {
+                busyAsExaminer++;
+                return true;
+              }
+              return false;
             });
             
             return !alreadyBusy;
@@ -439,7 +457,23 @@ export function generateSchedule(
           const protocolist = selectBestProtocolist(eligibleProtocolists, assignments, exam, day, staff);
           
           if (!protocolist) {
-            // Try next slot
+            // Track why no protocolist found for this slot
+            if (internalStaff.length === 0) {
+              if (!dayFailureReasons.has(day)) {
+                dayFailureReasons.set(day, 'Keine internen Mitarbeiter (können als Protokollant fungieren)');
+              }
+            } else if (eligibleProtocolists.length === 0) {
+              const details: string[] = [];
+              if (notAvailable > 0) details.push(`${notAvailable} nicht verfügbar`);
+              if (busyAsExaminer > 0) details.push(`${busyAsExaminer} als Prüfer belegt`);
+              if (busyAsProtocolist > 0) details.push(`${busyAsProtocolist} als Protokollant belegt`);
+              const examinersAreInternal = internalStaff.some(s => s.id === exam.examiner1Id || s.id === exam.examiner2Id);
+              if (examinersAreInternal) details.push('Prüfer können nicht eigene Prüfung protokollieren');
+              
+              if (!dayFailureReasons.has(day) || dayFailureReasons.get(day) === 'Keine freien Zeitslots oder Protokollanten') {
+                dayFailureReasons.set(day, `Alle ${notExaminerCount} möglichen Protokollanten belegt (${details.join(', ')})`);
+              }
+            }
             currentTime += duration;
             continue;
           }
