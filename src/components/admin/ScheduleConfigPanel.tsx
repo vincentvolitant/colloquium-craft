@@ -6,10 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2, MapPin } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, MapPin, ChevronDown, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { Room, RoomMapping } from '@/types';
@@ -215,36 +215,74 @@ export function ScheduleConfigPanel() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {kompetenzfelder.map((kf) => (
-              <div key={kf} className="flex items-center gap-4">
-                <Label className="w-48 font-medium">{kf}</Label>
-                <div className="flex-1">
-                  <Select
-                    value={getRoomsForKompetenzfeld(kf).join(',')}
-                    onValueChange={(value) => {
-                      const selectedRooms = value ? value.split(',').filter(Boolean) : [];
-                      handleRoomMappingChange(kf, selectedRooms);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Räume auswählen..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rooms.map((room) => (
-                        <SelectItem key={room.id} value={room.name}>
-                          {room.name}
-                        </SelectItem>
+            {kompetenzfelder.map((kf) => {
+              const selectedRooms = getRoomsForKompetenzfeld(kf);
+              
+              const toggleRoom = (roomName: string) => {
+                const newSelection = selectedRooms.includes(roomName)
+                  ? selectedRooms.filter(r => r !== roomName)
+                  : [...selectedRooms, roomName];
+                handleRoomMappingChange(kf, newSelection);
+              };
+              
+              const removeRoom = (roomName: string) => {
+                handleRoomMappingChange(kf, selectedRooms.filter(r => r !== roomName));
+              };
+              
+              return (
+                <div key={kf} className="space-y-2">
+                  <div className="flex items-center gap-4">
+                    <Label className="w-48 font-medium shrink-0">{kf}</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="justify-between min-w-[200px]">
+                          {selectedRooms.length === 0 
+                            ? 'Räume auswählen...' 
+                            : `${selectedRooms.length} Raum/Räume ausgewählt`}
+                          <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-2" align="start">
+                        <div className="space-y-2">
+                          {rooms.map((room) => (
+                            <label
+                              key={room.id}
+                              className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 -mx-2"
+                            >
+                              <Checkbox
+                                checked={selectedRooms.includes(room.name)}
+                                onCheckedChange={() => toggleRoom(room.name)}
+                              />
+                              <span className="text-sm">{room.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  
+                  {selectedRooms.length > 0 && (
+                    <div className="flex flex-wrap gap-1 ml-52">
+                      {selectedRooms.map((roomName) => (
+                        <Badge 
+                          key={roomName} 
+                          variant="secondary"
+                          className="gap-1 pr-1"
+                        >
+                          {roomName}
+                          <button
+                            onClick={() => removeRoom(roomName)}
+                            className="ml-1 hover:bg-accent rounded-sm p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-1">
-                  {getRoomsForKompetenzfeld(kf).map((roomName) => (
-                    <Badge key={roomName} variant="outline">{roomName}</Badge>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
