@@ -299,6 +299,12 @@ export function generateSchedule(
   const assignments = new Map<string, StaffAssignment>();
   const usedSlots = new Set<string>(); // "day-room-startTime"
   
+  // Day statistics for debugging
+  const dayStats = new Map<string, { scheduled: number; slotsChecked: number; skippedExaminers: number }>();
+  for (const day of config.days) {
+    dayStats.set(day, { scheduled: 0, slotsChecked: 0, skippedExaminers: 0 });
+  }
+  
   // Initialize staff assignments
   for (const s of staff) {
     assignments.set(s.id, {
@@ -342,16 +348,20 @@ export function generateSchedule(
       if (scheduled) break;
       triedDays.push(day);
       
+      const stats = dayStats.get(day)!;
+      
       // Check examiner availability for this day first
       const examiner1AvailableDay = !examiner1 || isStaffAvailable(examiner1, day, config.startTime, config.endTime, config);
       const examiner2AvailableDay = !examiner2 || isStaffAvailable(examiner2, day, config.startTime, config.endTime, config);
       
       if (!examiner1AvailableDay) {
-        dayFailureReasons.set(day, `${examiner1?.name || 'Prüfer 1'} nicht verfügbar`);
+        stats.skippedExaminers++;
+        dayFailureReasons.set(day, `${examiner1?.name || 'Prüfer 1'} nicht verfügbar an diesem Tag`);
         continue; // Try next day
       }
       if (!examiner2AvailableDay) {
-        dayFailureReasons.set(day, `${examiner2?.name || 'Prüfer 2'} nicht verfügbar`);
+        stats.skippedExaminers++;
+        dayFailureReasons.set(day, `${examiner2?.name || 'Prüfer 2'} nicht verfügbar an diesem Tag`);
         continue; // Try next day
       }
       
@@ -367,6 +377,7 @@ export function generateSchedule(
         const endLimit = timeToMinutes(config.endTime);
         
         while (currentTime + duration <= endLimit) {
+          stats.slotsChecked++;
           const startTime = minutesToTime(currentTime);
           const endTime = addMinutes(startTime, duration);
           const slotKey = `${day}-${roomName}-${startTime}`;
@@ -520,6 +531,7 @@ export function generateSchedule(
           
           events.push(event);
           usedSlots.add(slotKey);
+          stats.scheduled++;
           
           // Update assignments
           const protocolAssignment = assignments.get(protocolist.id)!;
@@ -540,13 +552,17 @@ export function generateSchedule(
     }
     
     if (!scheduled) {
-      // Build detailed failure message
+      // Build detailed failure message with day statistics
       const triedDaysInfo = triedDays.map(d => {
+        const stats = dayStats.get(d);
         const reason = dayFailureReasons.get(d) || 'unbekannter Grund';
-        return `${d}: ${reason}`;
+        if (reason.includes('nicht verfügbar an diesem Tag')) {
+          return `${d}: ⛔ ${reason} (0 Slots geprüft)`;
+        }
+        return `${d}: ${reason} (${stats?.slotsChecked || 0} Slots geprüft)`;
       }).join('; ');
       
-      const message = `Prüfung für ${exam.studentName} konnte nicht geplant werden. Versuchte Tage: ${triedDaysInfo}`;
+      const message = `Prüfung für ${exam.studentName} konnte nicht geplant werden. ${triedDaysInfo}`;
       const suggestion = 'Prüfen Sie die Verfügbarkeit der Prüfer an allen Tagen oder fügen Sie weitere Tage/Räume hinzu';
       
       conflicts.push({
@@ -560,6 +576,38 @@ export function generateSchedule(
     }
   }
   
+  // Add day distribution summary
+  const dayDistribution: string[] = [];
+  let hasEmptyDay = false;
+  for (const [day, stats] of dayStats) {
+    dayDistribution.push(`${day}: ${stats.scheduled} Prüfungen`);
+    if (stats.scheduled === 0 && exams.length > 0) {
+      hasEmptyDay = true;
+    }
+  }
+  
+  // Warn if any day is empty
+  if (hasEmptyDay) {
+    const emptyDays = Array.from(dayStats.entries())
+      .filter(([_, stats]) => stats.scheduled === 0)
+      .map(([day, stats]) => `${day} (${stats.skippedExaminers} Prüfungen wegen Prüfer-Verfügbarkeit übersprungen)`);
+    
+    conflicts.push({
+      type: 'constraint',
+      severity: 'warning',
+      message: `⚠️ Tagesverteilung: ${dayDistribution.join(', ')}. Ungenutzte Tage: ${emptyDays.join(', ')}`,
+      suggestion: 'Prüfen Sie die Verfügbarkeitseinstellungen der Prüfer - möglicherweise sind nicht alle an allen Tagen verfügbar',
+    });
+  } else {
+    // Add info about distribution even if all days are used
+    conflicts.push({
+      type: 'constraint',
+      severity: 'warning',
+      message: `📊 Tagesverteilung: ${dayDistribution.join(', ')}`,
+      suggestion: 'Information zur Verteilung',
+    });
+  }
+
   // Add warnings for workload imbalance
   const protocolCounts = new Map<string, number>();
   for (const event of events) {
