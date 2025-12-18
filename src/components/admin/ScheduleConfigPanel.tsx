@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Plus, Trash2, MapPin, ChevronDown, X, GraduationCap, Info } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, MapPin, ChevronDown, X, GraduationCap, Info, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { Room, RoomMapping } from '@/types';
@@ -248,13 +249,23 @@ export function ScheduleConfigPanel() {
       {rooms.length > 0 && (exams.length > 0) && (
         <Card className="border-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <GraduationCap className="h-5 w-5" />
-              Prüfungen & Raum-Zuordnung
-            </CardTitle>
-            <CardDescription>
-              Übersicht aller Prüfungen nach Kompetenzfeld. Ordnen Sie Räume zu (Mehrfachauswahl möglich).
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Prüfungen & Raum-Zuordnung
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Übersicht aller Prüfungen nach Kompetenzfeld. Ordnen Sie Räume zu (Mehrfachauswahl möglich).
+                </CardDescription>
+              </div>
+              <Link to="/" target="_blank">
+                <Button variant="outline" className="gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  Öffentliche Ansicht
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Regular BA Kompetenzfelder */}
