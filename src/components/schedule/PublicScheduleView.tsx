@@ -75,12 +75,18 @@ export function PublicScheduleView() {
       const exam = exams.find(e => e.id === event.examId);
       if (!exam) return false;
       
-      // Search filter
+      // Search filter - includes student name, topic, and examiner names
       if (search) {
         const searchLower = search.toLowerCase();
         const matchesStudent = exam.studentName.toLowerCase().includes(searchLower);
         const matchesTopic = exam.topic.toLowerCase().includes(searchLower);
-        if (!matchesStudent && !matchesTopic) return false;
+        const examiner1Name = getStaffById(exam.examiner1Id)?.name?.toLowerCase() || '';
+        const examiner2Name = getStaffById(exam.examiner2Id)?.name?.toLowerCase() || '';
+        const protocolistName = getStaffById(event.protocolistId)?.name?.toLowerCase() || '';
+        const matchesExaminer = examiner1Name.includes(searchLower) || 
+                                examiner2Name.includes(searchLower) || 
+                                protocolistName.includes(searchLower);
+        if (!matchesStudent && !matchesTopic && !matchesExaminer) return false;
       }
       
       // Degree filter
