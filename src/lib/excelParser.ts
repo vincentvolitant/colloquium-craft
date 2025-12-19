@@ -359,7 +359,7 @@ export function parseStaff(
 export function exportScheduleToXLSX(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string };
+    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
@@ -378,7 +378,8 @@ export function exportScheduleToXLSX(
       'Datum': e.event.dayDate,
       'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
       'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
-      'Status': e.event.status,
+      'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+      'Absagegrund': e.event.cancelledReason || '',
     }));
   
   const maData = events
@@ -394,7 +395,8 @@ export function exportScheduleToXLSX(
       'Datum': e.event.dayDate,
       'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
       'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
-      'Status': e.event.status,
+      'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+      'Absagegrund': e.event.cancelledReason || '',
     }));
   
   const wb = XLSX.utils.book_new();
@@ -416,7 +418,7 @@ export function exportScheduleToXLSX(
 export function exportScheduleToCSV(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string };
+    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
@@ -424,7 +426,7 @@ export function exportScheduleToCSV(
 ): string {
   const headers = [
     'Degree', 'Kompetenzfeld', 'Name', 'Thema', 'Prüfer 1', 'Prüfer 2',
-    'Protokoll', 'Raum', 'Datum', 'Start', 'Ende', 'Öffentlich', 'Status'
+    'Protokoll', 'Raum', 'Datum', 'Start', 'Ende', 'Öffentlich', 'Status', 'Absagegrund'
   ];
   
   const rows = events.map(e => [
@@ -440,7 +442,8 @@ export function exportScheduleToCSV(
     e.event.startTime,
     e.event.endTime,
     e.exam.isPublic ? 'Ja' : 'Nein',
-    e.event.status,
+    e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+    e.event.cancelledReason || '',
   ]);
   
   const csvContent = [

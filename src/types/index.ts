@@ -95,6 +95,7 @@ export interface ScheduledEvent {
   protocolistId: string;
   status: ExamStatus;
   cancelledReason?: string;
+  cancelledAt?: string; // ISO timestamp
 }
 
 export interface ScheduleConfig {
