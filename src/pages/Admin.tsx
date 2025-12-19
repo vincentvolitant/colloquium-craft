@@ -7,10 +7,11 @@ import { ScheduleConfigPanel } from '@/components/admin/ScheduleConfigPanel';
 import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPanel';
 import { ExportPanel } from '@/components/admin/ExportPanel';
 import { AdminScheduleManager } from '@/components/admin/AdminScheduleManager';
+import { ScheduleImportWizard } from '@/components/admin/ScheduleImportWizard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Home, LogOut, Users, GraduationCap, ExternalLink, Calendar, Settings, Play, Download, ListChecks } from 'lucide-react';
+import { Home, LogOut, Users, GraduationCap, ExternalLink, Calendar, Settings, Play, Download, ListChecks, FileUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
@@ -144,6 +145,11 @@ export default function AdminPage() {
                 <Download className="h-4 w-4" />
                 Export
               </TabsTrigger>
+              <TabsTrigger value="import" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">8</span>
+                <FileUp className="h-4 w-4" />
+                Import
+              </TabsTrigger>
             </TabsList>
             
             {/* Step 1: Import Staff */}
@@ -213,6 +219,15 @@ export default function AdminPage() {
             <TabsContent value="export">
               <h2 className="text-lg font-semibold mb-4">Schritt 7: Export & Veröffentlichung</h2>
               <ExportPanel />
+            </TabsContent>
+            
+            {/* Step 8: Import (Roundtrip) */}
+            <TabsContent value="import">
+              <h2 className="text-lg font-semibold mb-4">Schritt 8: Plan aus XLSX einlesen</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Importieren Sie einen exportierten Plan zurück ins System (z.B. nach manueller Korrektur in Excel).
+              </p>
+              <ScheduleImportWizard />
             </TabsContent>
           </Tabs>
         </main>
