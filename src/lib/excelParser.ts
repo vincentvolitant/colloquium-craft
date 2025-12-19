@@ -453,3 +453,186 @@ export function exportScheduleToCSV(
   
   return csvContent;
 }
+
+// Schedule import types
+export interface ScheduleImportRow {
+  degree: string;
+  kompetenzfeld: string;
+  studentName: string;
+  topic: string;
+  examiner1Name: string;
+  examiner2Name: string;
+  protocolistName: string;
+  room: string;
+  dayDate: string;
+  startTime: string;
+  endTime: string;
+  isPublic: boolean;
+  status: 'SCHEDULED' | 'CANCELLED';
+  cancelledReason?: string;
+}
+
+export interface ScheduleImportResult {
+  rows: ScheduleImportRow[];
+  warnings: string[];
+  errors: string[];
+}
+
+// Parse the exported schedule XLSX format for re-import
+export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): ScheduleImportResult {
+  const rows: ScheduleImportRow[] = [];
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  
+  for (const sheet of sheets) {
+    // Detect degree from sheet name
+    const sheetDegree = sheet.name.toLowerCase().includes('master') ? 'MA' : 'BA';
+    
+    for (let i = 0; i < sheet.data.length; i++) {
+      const row = sheet.data[i];
+      const rowNum = i + 2; // Excel row number (1-indexed header + 1-indexed data)
+      
+      // Try to extract data from known column names (flexible matching)
+      const getValue = (patterns: string[]): string => {
+        for (const key of Object.keys(row)) {
+          const lowerKey = key.toLowerCase();
+          if (patterns.some(p => lowerKey.includes(p))) {
+            return String(row[key] || '').trim();
+          }
+        }
+        return '';
+      };
+      
+      const studentName = getValue(['name', 'student', 'kandidat']);
+      if (!studentName) {
+        warnings.push(`Zeile ${rowNum} (${sheet.name}): Kein Studentenname gefunden, übersprungen`);
+        continue;
+      }
+      
+      const topic = getValue(['thema', 'topic', 'titel']);
+      const kompetenzfeld = getValue(['kompetenzfeld', 'competence', 'feld']);
+      const examiner1Name = getValue(['prüfer 1', 'prüfer1', 'erstprüfer', 'examiner 1']);
+      const examiner2Name = getValue(['prüfer 2', 'prüfer2', 'zweitprüfer', 'examiner 2']);
+      const protocolistName = getValue(['protokoll', 'protocol']);
+      const room = getValue(['raum', 'room']);
+      const dayDate = getValue(['datum', 'date', 'day']);
+      
+      // Parse time - could be "HH:mm - HH:mm" format or separate columns
+      let startTime = '';
+      let endTime = '';
+      const timeValue = getValue(['zeit', 'time']);
+      if (timeValue && timeValue.includes('-')) {
+        const [start, end] = timeValue.split('-').map(t => t.trim());
+        startTime = start;
+        endTime = end;
+      } else {
+        startTime = getValue(['start', 'beginn', 'von']);
+        endTime = getValue(['ende', 'end', 'bis']);
+      }
+      
+      // Parse public flag
+      const publicValue = getValue(['öffentlich', 'public', 'ohne öffentlichkeit']);
+      const isPublic = !publicValue || !['x', 'ja', 'yes', '1', 'true', 'nein'].some(v => 
+        publicValue.toLowerCase().includes(v) && publicValue.toLowerCase().includes('ohne')
+      );
+      
+      // Parse status
+      const statusValue = getValue(['status']);
+      const status: 'SCHEDULED' | 'CANCELLED' = statusValue.toUpperCase() === 'CANCELLED' ? 'CANCELLED' : 'SCHEDULED';
+      const cancelledReason = getValue(['absagegrund', 'cancelled reason', 'grund']);
+      
+      // Validate required fields
+      if (!dayDate) {
+        errors.push(`Zeile ${rowNum} (${sheet.name}): Kein Datum für "${studentName}"`);
+        continue;
+      }
+      if (!startTime || !endTime) {
+        errors.push(`Zeile ${rowNum} (${sheet.name}): Keine Zeit für "${studentName}"`);
+        continue;
+      }
+      if (!room) {
+        errors.push(`Zeile ${rowNum} (${sheet.name}): Kein Raum für "${studentName}"`);
+        continue;
+      }
+      
+      rows.push({
+        degree: sheetDegree,
+        kompetenzfeld: kompetenzfeld || (sheetDegree === 'MA' ? 'Master' : ''),
+        studentName,
+        topic,
+        examiner1Name,
+        examiner2Name,
+        protocolistName,
+        room,
+        dayDate,
+        startTime,
+        endTime,
+        isPublic,
+        status,
+        cancelledReason: cancelledReason || undefined,
+      });
+    }
+  }
+  
+  return { rows, warnings, errors };
+}
+
+// Validate imported schedule for conflicts
+export function validateScheduleImport(
+  rows: ScheduleImportRow[],
+  staff: StaffMember[]
+): { valid: boolean; conflicts: string[] } {
+  const conflicts: string[] = [];
+  
+  // Build a map of person -> time slots
+  const personSlots = new Map<string, Array<{ day: string; start: number; end: number; student: string }>>();
+  
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + (minutes || 0);
+  };
+  
+  const normalizeName = (name: string): string => name.trim().toLowerCase().replace(/\s+/g, ' ');
+  
+  for (const row of rows) {
+    if (row.status === 'CANCELLED') continue; // Skip cancelled exams
+    
+    const start = timeToMinutes(row.startTime);
+    const end = timeToMinutes(row.endTime);
+    const slot = { day: row.dayDate, start, end, student: row.studentName };
+    
+    // Add slots for all people involved
+    const people = [row.examiner1Name, row.examiner2Name, row.protocolistName].filter(Boolean);
+    
+    for (const person of people) {
+      const key = normalizeName(person);
+      if (!personSlots.has(key)) {
+        personSlots.set(key, []);
+      }
+      personSlots.get(key)!.push(slot);
+    }
+  }
+  
+  // Check for overlaps per person
+  for (const [person, slots] of personSlots) {
+    for (let i = 0; i < slots.length; i++) {
+      for (let j = i + 1; j < slots.length; j++) {
+        const a = slots[i];
+        const b = slots[j];
+        
+        if (a.day !== b.day) continue;
+        
+        // Check overlap
+        if (!(a.end <= b.start || b.end <= a.start)) {
+          const staffMember = staff.find(s => normalizeName(s.name) === person);
+          const displayName = staffMember?.name || person;
+          conflicts.push(
+            `⚠️ ${displayName} ist doppelt gebucht am ${a.day}: "${a.student}" (${Math.floor(a.start/60)}:${String(a.start%60).padStart(2,'0')}-${Math.floor(a.end/60)}:${String(a.end%60).padStart(2,'0')}) und "${b.student}" (${Math.floor(b.start/60)}:${String(b.start%60).padStart(2,'0')}-${Math.floor(b.end/60)}:${String(b.end%60).padStart(2,'0')})`
+          );
+        }
+      }
+    }
+  }
+  
+  return { valid: conflicts.length === 0, conflicts };
+}

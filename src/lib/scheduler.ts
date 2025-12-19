@@ -540,8 +540,8 @@ export function generateSchedule(
             continue;
           }
           
-          // Check examiner conflicts (already scheduled with time overlap)
-          const hasConflict = events.some(e => {
+          // HARD CONSTRAINT: Check ALL conflicts for examiners (as examiner OR protocolist in other events)
+          const hasExaminerConflict = events.some(e => {
             if (e.dayDate !== day) return false;
             // Check for actual time overlap
             const existingStart = timeToMinutes(e.startTime);
@@ -553,15 +553,25 @@ export function generateSchedule(
             
             const otherExam = exams.find(ex => ex.id === e.examId);
             if (!otherExam) return false;
-            return (
+            
+            // Check if our examiners are busy as examiners in another exam
+            const examinerAsExaminer = (
               otherExam.examiner1Id === exam.examiner1Id ||
               otherExam.examiner2Id === exam.examiner1Id ||
               otherExam.examiner1Id === exam.examiner2Id ||
               otherExam.examiner2Id === exam.examiner2Id
             );
+            
+            // CRITICAL FIX: Also check if our examiners are busy as protocolists
+            const examinerAsProtocolist = (
+              e.protocolistId === exam.examiner1Id ||
+              e.protocolistId === exam.examiner2Id
+            );
+            
+            return examinerAsExaminer || examinerAsProtocolist;
           });
           
-          if (hasConflict) {
+          if (hasExaminerConflict) {
             currentTime += duration;
             continue;
           }
