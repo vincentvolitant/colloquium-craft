@@ -132,7 +132,12 @@ export const useScheduleStore = create<ScheduleState>()(
       cancelEvent: (eventId, reason) => set((state) => ({
         scheduledEvents: state.scheduledEvents.map(e => 
           e.id === eventId 
-            ? { ...e, status: 'cancelled' as const, cancelledReason: reason }
+            ? { 
+                ...e, 
+                status: 'cancelled' as const, 
+                cancelledReason: reason,
+                cancelledAt: new Date().toISOString()
+              }
             : e
         )
       })),

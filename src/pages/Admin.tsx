@@ -6,10 +6,11 @@ import { StaffAvailabilityPanel } from '@/components/admin/StaffAvailabilityPane
 import { ScheduleConfigPanel } from '@/components/admin/ScheduleConfigPanel';
 import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPanel';
 import { ExportPanel } from '@/components/admin/ExportPanel';
+import { AdminScheduleManager } from '@/components/admin/AdminScheduleManager';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Home, LogOut, Users, GraduationCap, ExternalLink, Calendar, Settings, Play, Download } from 'lucide-react';
+import { Home, LogOut, Users, GraduationCap, ExternalLink, Calendar, Settings, Play, Download, ListChecks } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
@@ -133,8 +134,13 @@ export default function AdminPage() {
                 <Play className="h-4 w-4" />
                 Generieren
               </TabsTrigger>
-              <TabsTrigger value="export" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <TabsTrigger value="manage" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">6</span>
+                <ListChecks className="h-4 w-4" />
+                Termine
+              </TabsTrigger>
+              <TabsTrigger value="export" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">7</span>
                 <Download className="h-4 w-4" />
                 Export
               </TabsTrigger>
@@ -197,9 +203,15 @@ export default function AdminPage() {
               <ScheduleGeneratorPanel />
             </TabsContent>
             
-            {/* Step 6: Export */}
+            {/* Step 6: Manage Events */}
+            <TabsContent value="manage">
+              <h2 className="text-lg font-semibold mb-4">Schritt 6: Termine verwalten</h2>
+              <AdminScheduleManager />
+            </TabsContent>
+            
+            {/* Step 7: Export */}
             <TabsContent value="export">
-              <h2 className="text-lg font-semibold mb-4">Schritt 6: Export & Veröffentlichung</h2>
+              <h2 className="text-lg font-semibold mb-4">Schritt 7: Export & Veröffentlichung</h2>
               <ExportPanel />
             </TabsContent>
           </Tabs>

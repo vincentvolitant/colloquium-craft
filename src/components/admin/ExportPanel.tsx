@@ -25,6 +25,7 @@ export function ExportPanel() {
           startTime: event.startTime,
           endTime: event.endTime,
           status: event.status,
+          cancelledReason: event.cancelledReason,
         },
         protocolist: getStaffById(event.protocolistId),
         examiner1: getStaffById(exam.examiner1Id),
