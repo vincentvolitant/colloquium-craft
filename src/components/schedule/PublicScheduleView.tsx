@@ -362,7 +362,7 @@ export function PublicScheduleView() {
       {/* Footer */}
       <footer className="border-t-2 mt-12">
         <div className="container py-6 text-center text-sm text-muted-foreground">
-          <p>Kolloquiumsplaner • Automatisch generierter Prüfungsplan</p>
+          <p>Kolloquiumsplaner • Gemacht mit Liebe im IxD Lab.</p>
         </div>
       </footer>
     </div>
