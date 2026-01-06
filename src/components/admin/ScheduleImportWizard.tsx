@@ -26,6 +26,7 @@ export function ScheduleImportWizard() {
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [fileName, setFileName] = useState('');
   const [lenientMode, setLenientMode] = useState(false);
+  const [importedVersionId, setImportedVersionId] = useState<string | null>(null);
   
   const { 
     staff, 
@@ -33,6 +34,7 @@ export function ScheduleImportWizard() {
     setExams,
     setScheduledEvents,
     createScheduleVersion,
+    publishVersion,
     scheduledEvents,
     scheduleVersions
   } = useScheduleStore();
@@ -114,6 +116,7 @@ export function ScheduleImportWizard() {
   const handleImport = () => {
     // Create new version
     const versionId = createScheduleVersion();
+    setImportedVersionId(versionId);
     
     // Build exams and events from import rows
     const newExams: Exam[] = [];
@@ -169,16 +172,28 @@ export function ScheduleImportWizard() {
       }
     }
     
-    // Set the data
+    // Set the data - REPLACE events for new version (not append)
     setExams(mergedExams);
-    setScheduledEvents([...scheduledEvents, ...newEvents]);
+    // Keep only events from OTHER versions, then add new events
+    const otherVersionEvents = scheduledEvents.filter(e => e.scheduleVersionId !== versionId);
+    setScheduledEvents([...otherVersionEvents, ...newEvents]);
     
     toast({
       title: 'Import erfolgreich',
-      description: `${newEvents.length} Termine wurden als neue Version importiert.`,
+      description: `${newEvents.length} Termine wurden als Entwurf importiert.`,
     });
     
     setStep('complete');
+  };
+  
+  const handlePublish = () => {
+    if (importedVersionId) {
+      publishVersion(importedVersionId);
+      toast({
+        title: 'Veröffentlicht',
+        description: 'Die importierte Planversion ist jetzt öffentlich sichtbar.',
+      });
+    }
   };
   
   const reset = () => {
@@ -189,7 +204,13 @@ export function ScheduleImportWizard() {
     setConflicts([]);
     setFileName('');
     setLenientMode(false);
+    setImportedVersionId(null);
   };
+  
+  // Check if imported version is already published
+  const isVersionPublished = importedVersionId 
+    ? scheduleVersions.find(v => v.id === importedVersionId)?.status === 'published'
+    : false;
   
   const canImport = importRows.length > 0 && (errors.length === 0 || lenientMode) && (conflicts.length === 0 || lenientMode);
   
@@ -363,12 +384,35 @@ export function ScheduleImportWizard() {
           <div className="text-center py-8">
             <Check className="h-12 w-12 mx-auto mb-4 text-primary" />
             <h3 className="text-lg font-medium mb-2">Import abgeschlossen</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {importRows.length} Termine wurden als neue Planversion importiert.
+            <p className="text-sm text-muted-foreground mb-2">
+              {importRows.length} Termine wurden importiert.
             </p>
-            <Button variant="outline" onClick={reset}>
-              Weiteren Plan importieren
-            </Button>
+            
+            {isVersionPublished ? (
+              <Badge variant="default" className="mb-4">
+                <Check className="h-3 w-3 mr-1" />
+                Veröffentlicht
+              </Badge>
+            ) : (
+              <div className="mb-4">
+                <Badge variant="secondary" className="mb-2">Entwurf</Badge>
+                <p className="text-xs text-muted-foreground">
+                  Die Version ist noch nicht öffentlich sichtbar.
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-2 justify-center">
+              {!isVersionPublished && (
+                <Button onClick={handlePublish}>
+                  <Check className="h-4 w-4 mr-2" />
+                  Jetzt veröffentlichen
+                </Button>
+              )}
+              <Button variant="outline" onClick={reset}>
+                Weiteren Plan importieren
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>
