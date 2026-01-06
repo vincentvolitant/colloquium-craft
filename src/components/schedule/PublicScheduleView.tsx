@@ -10,7 +10,7 @@ import { Settings, FileSpreadsheet, LayoutGrid, GanttChart, CalendarDays } from 
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { Degree, ScheduledEvent, Exam } from '@/types';
-import { KOMPETENZFELD_MASTER_LABEL } from '@/types';
+import { KOMPETENZFELD_MASTER_LABEL, getAllExaminerIds } from '@/types';
 
 export function PublicScheduleView() {
   const { exams, staff, scheduledEvents, scheduleVersions, config, getStaffById } = useScheduleStore();
@@ -335,16 +335,23 @@ export function PublicScheduleView() {
                                 </span>
                               </h3>
                               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {roomEvents.map(({ event, exam }) => (
-                                  <ExamCard
-                                    key={event.id}
-                                    exam={exam}
-                                    event={event}
-                                    examiner1={getStaffById(exam.examiner1Id)}
-                                    examiner2={getStaffById(exam.examiner2Id)}
-                                    protocolist={getStaffById(event.protocolistId)}
-                                  />
-                                ))}
+                                {roomEvents.map(({ event, exam }) => {
+                                  // Get all examiners for team exams
+                                  const allExaminerIds = getAllExaminerIds(exam);
+                                  const allExaminers = allExaminerIds.map(id => getStaffById(id));
+                                  
+                                  return (
+                                    <ExamCard
+                                      key={event.id}
+                                      exam={exam}
+                                      event={event}
+                                      examiner1={getStaffById(exam.examiner1Id)}
+                                      examiner2={getStaffById(exam.examiner2Id)}
+                                      protocolist={getStaffById(event.protocolistId)}
+                                      allExaminers={exam.isTeam ? allExaminers : undefined}
+                                    />
+                                  );
+                                })}
                               </div>
                             </section>
                           ))}

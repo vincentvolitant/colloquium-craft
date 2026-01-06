@@ -400,62 +400,6 @@ export function AdminScheduleManager() {
                 </CardContent>
               </Card>
             );
-                    <div className="flex gap-2 flex-shrink-0">
-                      {isCancelled ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => handleOpenReinstateDialog(event)}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                          Reaktivieren
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => handleOpenCancelDialog(event)}
-                        >
-                          <X className="h-4 w-4" />
-                          Absagen
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4 flex-shrink-0" />
-                      <span>{formatDate(event.dayDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4 flex-shrink-0" />
-                      <span>{event.startTime} – {event.endTime}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4 flex-shrink-0" />
-                      <span>{event.room}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-muted-foreground mt-3">
-                    <Users className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      <span><strong>Prüfer 1:</strong> {examiner1?.name || '—'}</span>
-                      <span><strong>Prüfer 2:</strong> {examiner2?.name || '—'}</span>
-                      <span><strong>Protokoll:</strong> {protocolist?.name || '—'}</span>
-                    </div>
-                  </div>
-                  {isCancelled && event.cancelledReason && (
-                    <p className="mt-3 text-sm text-destructive italic">
-                      Grund: {event.cancelledReason}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
           })
         )}
       </div>
