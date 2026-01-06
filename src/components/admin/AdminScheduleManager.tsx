@@ -32,8 +32,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { KOMPETENZFELD_MASTER_LABEL } from '@/types';
+import { KOMPETENZFELD_MASTER_LABEL, getAllExaminerIds, getExamDisplayNames } from '@/types';
 import type { ScheduledEvent } from '@/types';
+import { MergeColloquiaDialog } from './MergeColloquiaDialog';
 
 export function AdminScheduleManager() {
   const { 
@@ -203,9 +204,12 @@ export function AdminScheduleManager() {
             </Badge>
           )}
         </div>
-        {!publishedVersion && (
-          <Badge variant="secondary">Entwurf (nicht veröffentlicht)</Badge>
-        )}
+        <div className="flex gap-2 items-center">
+          <MergeColloquiaDialog />
+          {!publishedVersion && (
+            <Badge variant="secondary">Entwurf (nicht veröffentlicht)</Badge>
+          )}
+        </div>
       </div>
       
       {/* Filters */}
@@ -267,12 +271,19 @@ export function AdminScheduleManager() {
             const isCancelled = event.status === 'cancelled';
             const kompetenzfeldDisplay = exam.degree === 'MA' ? KOMPETENZFELD_MASTER_LABEL : exam.kompetenzfeld;
             
+            // Team exam support
+            const isTeam = exam.isTeam;
+            const displayNames = getExamDisplayNames(exam);
+            const allExaminerIds = getAllExaminerIds(exam);
+            const allExaminers = allExaminerIds.map(id => getStaffById(id));
+            
             return (
               <Card 
                 key={event.id}
                 className={cn(
                   "border-2 transition-all",
-                  isCancelled && "bg-muted/50"
+                  isCancelled && "bg-muted/50",
+                  isTeam && "border-primary/50"
                 )}
               >
                 <CardHeader className="pb-2 pt-4 px-4">
@@ -282,6 +293,12 @@ export function AdminScheduleManager() {
                         <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'}>
                           {exam.degree}
                         </Badge>
+                        {isTeam && (
+                          <Badge variant="outline" className="gap-1 bg-primary/10">
+                            <Users className="h-3 w-3" />
+                            Teamarbeit
+                          </Badge>
+                        )}
                         {kompetenzfeldDisplay && (
                           <Badge variant="outline" className="font-normal">
                             {kompetenzfeldDisplay}
@@ -298,7 +315,7 @@ export function AdminScheduleManager() {
                         "text-lg",
                         isCancelled && "line-through text-muted-foreground"
                       )}>
-                        {exam.studentName}
+                        {displayNames.join(' & ')}
                       </CardTitle>
                       <p className={cn(
                         "text-sm text-muted-foreground line-clamp-1",
@@ -307,6 +324,82 @@ export function AdminScheduleManager() {
                         {exam.topic}
                       </p>
                     </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      {isCancelled ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => handleOpenReinstateDialog(event)}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Reaktivieren
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => handleOpenCancelDialog(event)}
+                        >
+                          <X className="h-4 w-4" />
+                          Absagen
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-4 pb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="h-4 w-4 flex-shrink-0" />
+                      <span>{formatDate(event.dayDate)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4 flex-shrink-0" />
+                      <span>{event.startTime} – {event.endTime}</span>
+                      {isTeam && (
+                        <Badge variant="secondary" className="text-xs ml-1">
+                          {event.durationMinutes || exam.durationMinutes} Min.
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-4 w-4 flex-shrink-0" />
+                      <span>{event.room}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 text-sm text-muted-foreground mt-3">
+                    <Users className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {isTeam && allExaminers.length > 0 ? (
+                        // Team: show all examiners
+                        <>
+                          {allExaminers.map((examiner, idx) => (
+                            <span key={idx}>
+                              <strong>Prüfer {idx + 1}:</strong> {examiner?.name || '—'}
+                            </span>
+                          ))}
+                          <span><strong>Protokoll:</strong> {protocolist?.name || '—'}</span>
+                        </>
+                      ) : (
+                        // Regular: show 2 examiners
+                        <>
+                          <span><strong>Prüfer 1:</strong> {examiner1?.name || '—'}</span>
+                          <span><strong>Prüfer 2:</strong> {examiner2?.name || '—'}</span>
+                          <span><strong>Protokoll:</strong> {protocolist?.name || '—'}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {isCancelled && event.cancelledReason && (
+                    <p className="mt-3 text-sm text-destructive italic">
+                      Grund: {event.cancelledReason}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
                     <div className="flex gap-2 flex-shrink-0">
                       {isCancelled ? (
                         <Button
