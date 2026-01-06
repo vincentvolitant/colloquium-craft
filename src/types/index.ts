@@ -11,12 +11,22 @@ export interface Exam {
   degree: Degree;
   kompetenzfeld: string | null; // Required for BA, null for MA
   studentName: string;
+  studentFirstName?: string; // Optional separate first name
+  studentLastName?: string; // Optional separate last name
   studentId?: string;
   topic: string;
   examiner1Id: string;
   examiner2Id: string;
   isPublic: boolean;
   notes?: string;
+}
+
+// Helper to get full student name from Exam
+export function getStudentDisplayName(exam: Exam): string {
+  if (exam.studentFirstName || exam.studentLastName) {
+    return [exam.studentFirstName, exam.studentLastName].filter(Boolean).join(' ');
+  }
+  return exam.studentName;
 }
 
 // Time window for availability
