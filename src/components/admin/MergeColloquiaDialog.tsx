@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -27,12 +28,17 @@ import {
   Clock, 
   Check,
   ChevronRight,
-  X
+  X,
+  AlertTriangle,
+  AlertCircle,
+  CalendarDays,
+  MapPin
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { SLOT_DURATIONS, canBeProtocolist } from '@/types';
-import type { ScheduledEvent, Exam, Degree } from '@/types';
+import type { ScheduledEvent, Exam } from '@/types';
+import type { MergeSlotOption, MergeValidationResult } from '@/lib/scheduler';
 
 type WizardStep = 'select1' | 'select2' | 'confirm';
 
@@ -43,6 +49,7 @@ export function MergeColloquiaDialog() {
     exams, 
     staff,
     getStaffById,
+    validateMerge,
     mergeExams
   } = useScheduleStore();
   const { toast } = useToast();
@@ -53,6 +60,9 @@ export function MergeColloquiaDialog() {
   const [selectedExam1, setSelectedExam1] = useState<string | null>(null);
   const [selectedExam2, setSelectedExam2] = useState<string | null>(null);
   const [selectedProtocolist, setSelectedProtocolist] = useState<string>('');
+  const [selectedSlot, setSelectedSlot] = useState<MergeSlotOption | null>(null);
+  const [validation, setValidation] = useState<MergeValidationResult | null>(null);
+  const [alternativeSlots, setAlternativeSlots] = useState<MergeSlotOption[]>([]);
   
   // Get active version events
   const publishedVersion = scheduleVersions.find(v => v.status === 'published');
@@ -132,15 +142,38 @@ export function MergeColloquiaDialog() {
       examinerIds,
       degree: exam1.degree,
       durationMinutes,
-      dayDate: event1.dayDate,
-      room: event1.room,
-      startTime: event1.startTime,
+      dayDate: selectedSlot?.dayDate || event1.dayDate,
+      room: selectedSlot?.room || event1.room,
+      startTime: selectedSlot?.startTime || event1.startTime,
     };
-  }, [selectedExam1, selectedExam2, exams, versionEvents]);
+  }, [selectedExam1, selectedExam2, exams, versionEvents, selectedSlot]);
   
   const eligibleProtocolists = useMemo(() => {
     return staff.filter(s => canBeProtocolist(s));
   }, [staff]);
+  
+  // Validate when entering confirm step or when protocolist/slot changes
+  useEffect(() => {
+    if (step === 'confirm' && selectedExam1 && selectedExam2) {
+      const targetSlot = selectedSlot ? {
+        dayDate: selectedSlot.dayDate,
+        room: selectedSlot.room,
+        startTime: selectedSlot.startTime,
+      } : undefined;
+      
+      const result = validateMerge(
+        selectedExam1, 
+        selectedExam2, 
+        selectedProtocolist || undefined,
+        targetSlot
+      );
+      
+      if (result) {
+        setValidation(result.validation);
+        setAlternativeSlots(result.alternativeSlots);
+      }
+    }
+  }, [step, selectedExam1, selectedExam2, selectedProtocolist, selectedSlot, validateMerge]);
   
   const handleSelectExam = (examId: string) => {
     if (step === 'select1') {
@@ -150,6 +183,9 @@ export function MergeColloquiaDialog() {
     } else if (step === 'select2') {
       setSelectedExam2(examId);
       setStep('confirm');
+      setValidation(null);
+      setAlternativeSlots([]);
+      setSelectedSlot(null);
     }
   };
   
@@ -159,20 +195,41 @@ export function MergeColloquiaDialog() {
       setStep('select1');
     } else if (step === 'confirm') {
       setSelectedExam2(null);
+      setValidation(null);
+      setAlternativeSlots([]);
+      setSelectedSlot(null);
       setStep('select2');
     }
     setSearch('');
   };
   
+  const handleSelectAlternativeSlot = (slot: MergeSlotOption) => {
+    setSelectedSlot(slot);
+  };
+  
   const handleMerge = () => {
     if (!selectedExam1 || !selectedExam2) return;
     
-    const result = mergeExams(selectedExam1, selectedExam2, selectedProtocolist || undefined);
+    const targetSlot = selectedSlot ? {
+      dayDate: selectedSlot.dayDate,
+      room: selectedSlot.room,
+      startTime: selectedSlot.startTime,
+    } : undefined;
+    
+    const result = mergeExams(
+      selectedExam1, 
+      selectedExam2, 
+      selectedProtocolist || undefined,
+      targetSlot
+    );
     
     if (result) {
+      const movedInfo = result.movedEvents && result.movedEvents.length > 0 
+        ? ` (${result.movedEvents.length} Termin(e) verschoben)` 
+        : '';
       toast({
         title: 'Kolloquien zusammengelegt',
-        description: `${result.mergedExam.studentName} - Doppelslot (${result.mergedExam.durationMinutes} Min.)`,
+        description: `${result.mergedExam.studentName} - Doppelslot (${result.mergedExam.durationMinutes} Min.)${movedInfo}`,
       });
       setOpen(false);
       resetSelection();
@@ -191,6 +248,9 @@ export function MergeColloquiaDialog() {
     setSelectedProtocolist('');
     setSearch('');
     setStep('select1');
+    setValidation(null);
+    setAlternativeSlots([]);
+    setSelectedSlot(null);
   };
   
   const formatDate = (dateStr: string) => {
@@ -211,6 +271,8 @@ export function MergeColloquiaDialog() {
   };
   
   const exam1Info = getSelectedExamInfo(selectedExam1);
+  const hasConflicts = validation && !validation.valid;
+  const hasWarnings = validation && validation.warnings.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
@@ -232,7 +294,7 @@ export function MergeColloquiaDialog() {
           <DialogDescription>
             {step === 'select1' && 'Wählen Sie das erste Kolloquium aus.'}
             {step === 'select2' && 'Wählen Sie das zweite Kolloquium (gleicher Abschluss).'}
-            {step === 'confirm' && 'Bestätigen Sie die Zusammenlegung.'}
+            {step === 'confirm' && 'Prüfen und bestätigen Sie die Zusammenlegung.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -327,7 +389,85 @@ export function MergeColloquiaDialog() {
         {/* Confirmation view */}
         {step === 'confirm' && mergePreview && (
           <div className="space-y-4">
-            <div className="p-4 border-2 border-primary rounded-md bg-primary/5">
+            {/* Conflict alerts */}
+            {hasConflicts && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium mb-1">Konflikte erkannt:</div>
+                  <ul className="text-sm list-disc list-inside space-y-1">
+                    {validation.conflicts.map((conflict, i) => (
+                      <li key={i}>{conflict}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Warning alerts */}
+            {hasWarnings && !hasConflicts && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="font-medium mb-1">Hinweise:</div>
+                  <ul className="text-sm list-disc list-inside space-y-1">
+                    {validation.warnings.map((warning, i) => (
+                      <li key={i}>{warning}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Alternative slots when conflicts exist */}
+            {hasConflicts && alternativeSlots.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Alternative Zeitslots wählen:</label>
+                <ScrollArea className="h-[120px] border rounded-md">
+                  <div className="divide-y">
+                    {alternativeSlots.map((slot, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectAlternativeSlot(slot)}
+                        className={cn(
+                          "w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors text-sm",
+                          selectedSlot?.dayDate === slot.dayDate && 
+                          selectedSlot?.startTime === slot.startTime &&
+                          selectedSlot?.room === slot.room && "bg-primary/10"
+                        )}
+                      >
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        <span>{formatDate(slot.dayDate)}</span>
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>{slot.startTime} - {slot.endTime}</span>
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span>{slot.room}</span>
+                        {selectedSlot?.dayDate === slot.dayDate && 
+                         selectedSlot?.startTime === slot.startTime &&
+                         selectedSlot?.room === slot.room && (
+                          <Check className="h-4 w-4 text-primary ml-auto" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+            
+            {hasConflicts && alternativeSlots.length === 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Keine alternativen Slots gefunden. Prüfen Sie die Verfügbarkeiten oder passen Sie die Konfiguration an.
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Merge preview */}
+            <div className={cn(
+              "p-4 border-2 rounded-md",
+              hasConflicts && !selectedSlot ? "border-destructive/50 bg-destructive/5" : "border-primary bg-primary/5"
+            )}>
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant={mergePreview.degree === 'BA' ? 'default' : 'secondary'}>
                   {mergePreview.degree}
@@ -373,7 +513,11 @@ export function MergeColloquiaDialog() {
             Abbrechen
           </Button>
           {step === 'confirm' && (
-            <Button onClick={handleMerge} className="gap-2">
+            <Button 
+              onClick={handleMerge} 
+              className="gap-2"
+              disabled={hasConflicts && !selectedSlot}
+            >
               <Merge className="h-4 w-4" />
               Zusammenlegen
             </Button>

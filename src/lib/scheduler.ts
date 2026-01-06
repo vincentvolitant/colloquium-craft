@@ -368,6 +368,276 @@ function checkBreakRule(
   return true;
 }
 
+// ============ MERGE VALIDATION HELPERS ============
+
+export interface MergeValidationResult {
+  valid: boolean;
+  conflicts: string[];
+  warnings: string[];
+}
+
+export interface MergeSlotOption {
+  dayDate: string;
+  room: string;
+  startTime: string;
+  endTime: string;
+  isOriginal: boolean;
+}
+
+/**
+ * Validate if a merge can be performed at a specific slot
+ */
+export function validateMergeSlot(
+  targetSlot: { dayDate: string; room: string; startTime: string; durationMinutes: number },
+  examinerIds: string[],
+  protocolistId: string | null,
+  currentEvents: ScheduledEvent[],
+  exams: Exam[],
+  staff: StaffMember[],
+  config: ScheduleConfig,
+  excludeEventIds: string[] = []
+): MergeValidationResult {
+  const conflicts: string[] = [];
+  const warnings: string[] = [];
+  
+  const startMinutes = timeToMinutes(targetSlot.startTime);
+  const endMinutes = startMinutes + targetSlot.durationMinutes;
+  const endTime = minutesToTime(endMinutes);
+  
+  // Filter out the events being merged
+  const relevantEvents = currentEvents.filter(e => 
+    !excludeEventIds.includes(e.id) && 
+    e.status === 'scheduled' &&
+    e.dayDate === targetSlot.dayDate
+  );
+  
+  // 1. Check if extended slot fits within schedule config time bounds
+  const configEndMinutes = timeToMinutes(config.endTime);
+  if (endMinutes > configEndMinutes) {
+    conflicts.push(`Der verlängerte Slot (${targetSlot.startTime}-${endTime}) überschreitet das Tageszeitfenster (bis ${config.endTime})`);
+  }
+  
+  // 2. Check room availability for extended duration
+  const roomConflict = relevantEvents.some(e => {
+    if (e.room !== targetSlot.room) return false;
+    const existingStart = timeToMinutes(e.startTime);
+    const existingEnd = timeToMinutes(e.endTime);
+    // Overlap check
+    return !(endMinutes <= existingStart || startMinutes >= existingEnd);
+  });
+  
+  if (roomConflict) {
+    conflicts.push(`Raum ${targetSlot.room} ist im erweiterten Zeitraum bereits belegt`);
+  }
+  
+  // 3. Check examiner availability for all (up to 4) examiners
+  for (const examinerId of examinerIds) {
+    const examiner = staff.find(s => s.id === examinerId);
+    if (!examiner) continue;
+    
+    // Check staff availability (overrides)
+    if (!isStaffAvailable(examiner, targetSlot.dayDate, targetSlot.startTime, endTime, config)) {
+      conflicts.push(`${examiner.name} ist im Zeitraum ${targetSlot.startTime}-${endTime} nicht verfügbar`);
+      continue;
+    }
+    
+    // Check for conflicts with other events (as examiner or protocolist)
+    const examinerConflict = relevantEvents.some(e => {
+      const existingStart = timeToMinutes(e.startTime);
+      const existingEnd = timeToMinutes(e.endTime);
+      // No overlap = ok
+      if (endMinutes <= existingStart || startMinutes >= existingEnd) return false;
+      
+      const exam = exams.find(ex => ex.id === e.examId);
+      if (!exam) return false;
+      
+      // Check if this examiner is involved in that event
+      const asExaminer = exam.examiner1Id === examinerId || exam.examiner2Id === examinerId ||
+                         (exam.examinerIds && exam.examinerIds.includes(examinerId));
+      const asProtocolist = e.protocolistId === examinerId;
+      
+      return asExaminer || asProtocolist;
+    });
+    
+    if (examinerConflict) {
+      conflicts.push(`${examiner.name} hat eine überlappende Prüfung im Zeitraum`);
+    }
+  }
+  
+  // 4. Check protocolist availability
+  if (protocolistId) {
+    const protocolist = staff.find(s => s.id === protocolistId);
+    if (protocolist) {
+      if (!isStaffAvailable(protocolist, targetSlot.dayDate, targetSlot.startTime, endTime, config)) {
+        conflicts.push(`Protokollant ${protocolist.name} ist im erweiterten Zeitraum nicht verfügbar`);
+      } else {
+        // Check for conflicts with other events
+        const protocolConflict = relevantEvents.some(e => {
+          const existingStart = timeToMinutes(e.startTime);
+          const existingEnd = timeToMinutes(e.endTime);
+          if (endMinutes <= existingStart || startMinutes >= existingEnd) return false;
+          
+          const exam = exams.find(ex => ex.id === e.examId);
+          if (!exam) return false;
+          
+          const asExaminer = exam.examiner1Id === protocolistId || exam.examiner2Id === protocolistId ||
+                             (exam.examinerIds && exam.examinerIds.includes(protocolistId));
+          const asProtocolist = e.protocolistId === protocolistId;
+          
+          return asExaminer || asProtocolist;
+        });
+        
+        if (protocolConflict) {
+          conflicts.push(`Protokollant ${protocolist.name} hat eine überlappende Prüfung`);
+        }
+      }
+    }
+  }
+  
+  // 5. Check break rules for all staff
+  const slot = { day: targetSlot.dayDate, room: targetSlot.room, startTime: targetSlot.startTime, endTime };
+  for (const staffId of [...examinerIds, ...(protocolistId ? [protocolistId] : [])]) {
+    if (!checkBreakRule(staffId, relevantEvents, slot, exams)) {
+      const staffMember = staff.find(s => s.id === staffId);
+      warnings.push(`${staffMember?.name || 'Person'} würde die maximale Anzahl aufeinanderfolgender Prüfungen überschreiten`);
+    }
+  }
+  
+  return {
+    valid: conflicts.length === 0,
+    conflicts,
+    warnings,
+  };
+}
+
+/**
+ * Find alternative slots for a merged colloquium
+ */
+export function findAlternativeMergeSlots(
+  durationMinutes: number,
+  examinerIds: string[],
+  protocolistId: string | null,
+  currentEvents: ScheduledEvent[],
+  exams: Exam[],
+  staff: StaffMember[],
+  config: ScheduleConfig,
+  excludeEventIds: string[] = [],
+  preferredDay?: string,
+  maxResults: number = 5
+): MergeSlotOption[] {
+  const alternatives: MergeSlotOption[] = [];
+  const startMinutes = timeToMinutes(config.startTime);
+  const endMinutes = timeToMinutes(config.endTime);
+  
+  // Sort days: preferred day first, then chronologically
+  const sortedDays = [...config.days].sort((a, b) => {
+    if (a === preferredDay) return -1;
+    if (b === preferredDay) return 1;
+    return a.localeCompare(b);
+  });
+  
+  for (const day of sortedDays) {
+    for (const room of config.rooms) {
+      let currentTime = startMinutes;
+      
+      while (currentTime + durationMinutes <= endMinutes && alternatives.length < maxResults) {
+        const slotStartTime = minutesToTime(currentTime);
+        
+        const validation = validateMergeSlot(
+          { dayDate: day, room: room.name, startTime: slotStartTime, durationMinutes },
+          examinerIds,
+          protocolistId,
+          currentEvents,
+          exams,
+          staff,
+          config,
+          excludeEventIds
+        );
+        
+        if (validation.valid) {
+          alternatives.push({
+            dayDate: day,
+            room: room.name,
+            startTime: slotStartTime,
+            endTime: minutesToTime(currentTime + durationMinutes),
+            isOriginal: false,
+          });
+        }
+        
+        currentTime += 30; // Try every 30 minutes
+      }
+    }
+    
+    if (alternatives.length >= maxResults) break;
+  }
+  
+  return alternatives;
+}
+
+/**
+ * Re-optimize schedule after merge to fill gaps
+ */
+export function reoptimizeAfterMerge(
+  freedSlot: { dayDate: string; room: string; startTime: string; endTime: string },
+  currentEvents: ScheduledEvent[],
+  exams: Exam[],
+  staff: StaffMember[],
+  roomMappings: RoomMapping[],
+  config: ScheduleConfig,
+  versionId: string
+): { movedEvents: ScheduledEvent[]; filledWith?: ScheduledEvent } {
+  const movedEvents: ScheduledEvent[] = [];
+  const freedStartMinutes = timeToMinutes(freedSlot.startTime);
+  const freedEndMinutes = timeToMinutes(freedSlot.endTime);
+  const freedDuration = freedEndMinutes - freedStartMinutes;
+  
+  // Find events that could fill or be moved into the gap
+  const sameRoomSameDayEvents = currentEvents.filter(e => 
+    e.dayDate === freedSlot.dayDate && 
+    e.room === freedSlot.room && 
+    e.status === 'scheduled' &&
+    timeToMinutes(e.startTime) > freedEndMinutes // Events after the freed slot
+  ).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+  
+  // Try to shift later events forward to close the gap
+  for (const event of sameRoomSameDayEvents) {
+    const exam = exams.find(e => e.id === event.examId);
+    if (!exam) continue;
+    
+    const eventDuration = timeToMinutes(event.endTime) - timeToMinutes(event.startTime);
+    const newStartTime = freedSlot.startTime;
+    const newEndMinutes = freedStartMinutes + eventDuration;
+    const newEndTime = minutesToTime(newEndMinutes);
+    
+    // Check if this event can be moved earlier
+    const examinerIds = getAllExaminerIds(exam);
+    const validation = validateMergeSlot(
+      { dayDate: freedSlot.dayDate, room: freedSlot.room, startTime: newStartTime, durationMinutes: eventDuration },
+      examinerIds,
+      event.protocolistId,
+      currentEvents.filter(e => e.id !== event.id),
+      exams,
+      staff,
+      config,
+      [event.id]
+    );
+    
+    if (validation.valid) {
+      const movedEvent: ScheduledEvent = {
+        ...event,
+        startTime: newStartTime,
+        endTime: newEndTime,
+      };
+      movedEvents.push(movedEvent);
+      break; // Only move the first eligible event
+    }
+  }
+  
+  return { movedEvents };
+}
+
+// ============ MAIN SCHEDULING FUNCTION ============
+
 export function generateSchedule(
   exams: Exam[],
   staff: StaffMember[],

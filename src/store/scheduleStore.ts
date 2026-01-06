@@ -13,6 +13,13 @@ import type {
   Degree
 } from '@/types';
 import { SLOT_DURATIONS } from '@/types';
+import { 
+  validateMergeSlot, 
+  findAlternativeMergeSlots, 
+  reoptimizeAfterMerge,
+  type MergeValidationResult,
+  type MergeSlotOption
+} from '@/lib/scheduler';
 
 interface ScheduleState {
   // Data
@@ -53,8 +60,17 @@ interface ScheduleState {
   authenticateAdmin: (password: string) => boolean;
   logoutAdmin: () => void;
   
-  // Merge actions
-  mergeExams: (examId1: string, examId2: string, protocolistId?: string) => { mergedExam: Exam; mergedEvent: ScheduledEvent } | null;
+  // Merge actions with validation
+  validateMerge: (examId1: string, examId2: string, protocolistId?: string, targetSlot?: { dayDate: string; room: string; startTime: string }) => {
+    validation: MergeValidationResult;
+    alternativeSlots: MergeSlotOption[];
+    targetSlot: { dayDate: string; room: string; startTime: string; durationMinutes: number } | null;
+  } | null;
+  mergeExams: (examId1: string, examId2: string, protocolistId?: string, targetSlot?: { dayDate: string; room: string; startTime: string }) => { 
+    mergedExam: Exam; 
+    mergedEvent: ScheduledEvent;
+    movedEvents?: ScheduledEvent[];
+  } | null;
   
   // Helpers
   getStaffById: (id: string) => StaffMember | undefined;
@@ -189,18 +205,78 @@ export const useScheduleStore = create<ScheduleState>()(
       },
       logoutAdmin: () => set({ isAdminAuthenticated: false }),
       
-      // Merge two exams into a team colloquium
-      mergeExams: (examId1, examId2, protocolistId) => {
+      // Validate merge before performing it
+      validateMerge: (examId1, examId2, protocolistId, targetSlot) => {
+        const state = get();
+        const exam1 = state.exams.find(e => e.id === examId1);
+        const exam2 = state.exams.find(e => e.id === examId2);
+        
+        if (!exam1 || !exam2 || exam1.degree !== exam2.degree) return null;
+        
+        const activeVersion = state.scheduleVersions.find(v => v.status === 'published') 
+          || state.scheduleVersions[state.scheduleVersions.length - 1];
+        if (!activeVersion) return null;
+        
+        const event1 = state.scheduledEvents.find(e => e.examId === examId1 && e.scheduleVersionId === activeVersion.id);
+        const event2 = state.scheduledEvents.find(e => e.examId === examId2 && e.scheduleVersionId === activeVersion.id);
+        if (!event1 || !event2) return null;
+        
+        const examinerIds = [...new Set([
+          exam1.examiner1Id, exam1.examiner2Id,
+          exam2.examiner1Id, exam2.examiner2Id
+        ])].filter(Boolean).slice(0, 4);
+        
+        const durationMinutes = SLOT_DURATIONS[exam1.degree] * 2;
+        const earlierEvent = event1.startTime <= event2.startTime ? event1 : event2;
+        
+        const slotToValidate = targetSlot || {
+          dayDate: earlierEvent.dayDate,
+          room: earlierEvent.room,
+          startTime: earlierEvent.startTime,
+        };
+        
+        const validation = validateMergeSlot(
+          { ...slotToValidate, durationMinutes },
+          examinerIds,
+          protocolistId || event1.protocolistId || null,
+          state.scheduledEvents.filter(e => e.scheduleVersionId === activeVersion.id),
+          state.exams,
+          state.staff,
+          state.config,
+          [event1.id, event2.id]
+        );
+        
+        let alternativeSlots: MergeSlotOption[] = [];
+        if (!validation.valid) {
+          alternativeSlots = findAlternativeMergeSlots(
+            durationMinutes,
+            examinerIds,
+            protocolistId || event1.protocolistId || null,
+            state.scheduledEvents.filter(e => e.scheduleVersionId === activeVersion.id),
+            state.exams,
+            state.staff,
+            state.config,
+            [event1.id, event2.id],
+            earlierEvent.dayDate
+          );
+        }
+        
+        return {
+          validation,
+          alternativeSlots,
+          targetSlot: { ...slotToValidate, durationMinutes },
+        };
+      },
+      
+      // Merge two exams into a team colloquium with optional target slot
+      mergeExams: (examId1, examId2, protocolistId, targetSlot) => {
         const state = get();
         const exam1 = state.exams.find(e => e.id === examId1);
         const exam2 = state.exams.find(e => e.id === examId2);
         
         if (!exam1 || !exam2) return null;
-        
-        // Must be same degree
         if (exam1.degree !== exam2.degree) return null;
         
-        // Get events for both exams
         const activeVersion = state.scheduleVersions.find(v => v.status === 'published') 
           || state.scheduleVersions[state.scheduleVersions.length - 1];
         if (!activeVersion) return null;
@@ -210,28 +286,33 @@ export const useScheduleStore = create<ScheduleState>()(
         
         if (!event1 || !event2) return null;
         
-        // Collect unique examiner IDs (up to 4)
         const examinerIds = [...new Set([
-          exam1.examiner1Id,
-          exam1.examiner2Id,
-          exam2.examiner1Id,
-          exam2.examiner2Id
+          exam1.examiner1Id, exam1.examiner2Id,
+          exam2.examiner1Id, exam2.examiner2Id
         ])].filter(Boolean).slice(0, 4);
         
-        // Calculate doubled duration
-        const baseDuration = SLOT_DURATIONS[exam1.degree];
-        const durationMinutes = baseDuration * 2;
+        const durationMinutes = SLOT_DURATIONS[exam1.degree] * 2;
         
-        // Create merged exam
+        // Use targetSlot if provided, otherwise use earlier event
+        const earlierEvent = event1.startTime <= event2.startTime ? event1 : event2;
+        const laterEvent = event1.startTime > event2.startTime ? event1 : event2;
+        const finalSlot = targetSlot || {
+          dayDate: earlierEvent.dayDate,
+          room: earlierEvent.room,
+          startTime: earlierEvent.startTime,
+        };
+        
+        const startMinutes = parseInt(finalSlot.startTime.split(':')[0]) * 60 + parseInt(finalSlot.startTime.split(':')[1]);
+        const endMinutes = startMinutes + durationMinutes;
+        const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+        
         const mergedExam: Exam = {
           id: crypto.randomUUID(),
           degree: exam1.degree,
           kompetenzfeld: exam1.kompetenzfeld || exam2.kompetenzfeld,
           studentName: `${exam1.studentName} & ${exam2.studentName}`,
           studentNames: [exam1.studentName, exam2.studentName],
-          topic: exam1.topic === exam2.topic 
-            ? exam1.topic 
-            : `${exam1.topic} / ${exam2.topic}`,
+          topic: exam1.topic === exam2.topic ? exam1.topic : `${exam1.topic} / ${exam2.topic}`,
           examiner1Id: examinerIds[0] || '',
           examiner2Id: examinerIds[1] || '',
           examinerIds,
@@ -241,20 +322,13 @@ export const useScheduleStore = create<ScheduleState>()(
           durationMinutes,
         };
         
-        // Use the earlier event's time slot, extend to double duration
-        const earlierEvent = event1.startTime <= event2.startTime ? event1 : event2;
-        const startMinutes = parseInt(earlierEvent.startTime.split(':')[0]) * 60 + parseInt(earlierEvent.startTime.split(':')[1]);
-        const endMinutes = startMinutes + durationMinutes;
-        const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
-        
-        // Create merged event
         const mergedEvent: ScheduledEvent = {
           id: crypto.randomUUID(),
           scheduleVersionId: activeVersion.id,
           examId: mergedExam.id,
-          dayDate: earlierEvent.dayDate,
-          room: earlierEvent.room,
-          startTime: earlierEvent.startTime,
+          dayDate: finalSlot.dayDate,
+          room: finalSlot.room,
+          startTime: finalSlot.startTime,
           endTime,
           protocolistId: protocolistId || event1.protocolistId,
           status: 'scheduled',
@@ -262,16 +336,45 @@ export const useScheduleStore = create<ScheduleState>()(
           durationMinutes,
         };
         
-        // Update state: add merged exam/event, remove original events (keep original exams for reference)
-        set((state) => ({
-          exams: [...state.exams, mergedExam],
-          scheduledEvents: [
-            ...state.scheduledEvents.filter(e => e.id !== event1.id && e.id !== event2.id),
-            mergedEvent
-          ],
-        }));
+        // Re-optimize: try to fill the freed slot from the second (later) event
+        const freedSlot = {
+          dayDate: laterEvent.dayDate,
+          room: laterEvent.room,
+          startTime: laterEvent.startTime,
+          endTime: laterEvent.endTime,
+        };
         
-        return { mergedExam, mergedEvent };
+        const versionEvents = state.scheduledEvents.filter(
+          e => e.scheduleVersionId === activeVersion.id && e.id !== event1.id && e.id !== event2.id
+        );
+        
+        const { movedEvents } = reoptimizeAfterMerge(
+          freedSlot,
+          versionEvents,
+          state.exams,
+          state.staff,
+          state.roomMappings,
+          state.config,
+          activeVersion.id
+        );
+        
+        // Apply updates
+        set((state) => {
+          let updatedEvents = state.scheduledEvents.filter(e => e.id !== event1.id && e.id !== event2.id);
+          updatedEvents.push(mergedEvent);
+          
+          // Apply moved events
+          for (const moved of movedEvents) {
+            updatedEvents = updatedEvents.map(e => e.id === moved.id ? moved : e);
+          }
+          
+          return {
+            exams: [...state.exams, mergedExam],
+            scheduledEvents: updatedEvents,
+          };
+        });
+        
+        return { mergedExam, mergedEvent, movedEvents };
       },
 
       getStaffById: (id) => get().staff.find(s => s.id === id),
