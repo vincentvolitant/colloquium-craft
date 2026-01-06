@@ -11,6 +11,8 @@ export interface ExamColumnMapping {
   degree?: string;
   kompetenzfeld?: string;
   studentName?: string;
+  studentFirstName?: string;
+  studentLastName?: string;
   studentId?: string;
   topic?: string;
   examiner1?: string;
@@ -78,13 +80,27 @@ export function autoDetectExamMapping(headers: string[]): ExamColumnMapping {
     kfPatterns.some(p => lowerHeaders[i].includes(p))
   );
   
-  // Student name
-  const namePatterns = ['name', 'student', 'kandidat', 'prüfling'];
-  mapping.studentName = headers.find((_, i) => 
-    namePatterns.some(p => lowerHeaders[i].includes(p)) && 
-    !lowerHeaders[i].includes('prüfer') &&
-    !lowerHeaders[i].includes('examiner')
+  // Student name - try to detect first/last name columns
+  const firstNamePatterns = ['vorname', 'first name', 'firstname', 'given name'];
+  const lastNamePatterns = ['nachname', 'familienname', 'family name', 'lastname', 'surname'];
+  const fullNamePatterns = ['name', 'student', 'kandidat', 'prüfling'];
+  
+  mapping.studentFirstName = headers.find((_, i) => 
+    firstNamePatterns.some(p => lowerHeaders[i].includes(p))
   );
+  
+  mapping.studentLastName = headers.find((_, i) => 
+    lastNamePatterns.some(p => lowerHeaders[i].includes(p))
+  );
+  
+  // Only use full name if first/last not found
+  if (!mapping.studentFirstName && !mapping.studentLastName) {
+    mapping.studentName = headers.find((_, i) => 
+      fullNamePatterns.some(p => lowerHeaders[i].includes(p)) && 
+      !lowerHeaders[i].includes('prüfer') &&
+      !lowerHeaders[i].includes('examiner')
+    );
+  }
   
   // Student ID
   const idPatterns = ['matrikel', 'mtknr', 'id', 'nummer'];
@@ -195,8 +211,16 @@ export function parseExams(
       }
     }
     
-    // Parse student name
-    const studentName = mapping.studentName ? String(row[mapping.studentName] || '').trim() : '';
+    // Parse student name - support both combined and separate first/last name
+    const studentFirstName = mapping.studentFirstName ? String(row[mapping.studentFirstName] || '').trim() : undefined;
+    const studentLastName = mapping.studentLastName ? String(row[mapping.studentLastName] || '').trim() : undefined;
+    const studentNameCombined = mapping.studentName ? String(row[mapping.studentName] || '').trim() : '';
+    
+    // Build display name from parts if available
+    const studentName = (studentFirstName || studentLastName) 
+      ? [studentFirstName, studentLastName].filter(Boolean).join(' ')
+      : studentNameCombined;
+    
     if (!studentName) {
       warnings.push(`Row ${i + 2}: Missing student name, skipping`);
       continue;
@@ -272,6 +296,8 @@ export function parseExams(
       degree,
       kompetenzfeld,
       studentName,
+      studentFirstName: studentFirstName || undefined,
+      studentLastName: studentLastName || undefined,
       studentId: mapping.studentId ? String(row[mapping.studentId] || '') : undefined,
       topic,
       examiner1Id,

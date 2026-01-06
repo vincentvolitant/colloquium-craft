@@ -235,7 +235,43 @@ export function ExcelUploadWizard({ type, onComplete, existingStaff }: ExcelUplo
                 )}
                 
                 <div className="space-y-2">
-                  <Label>Name *</Label>
+                  <Label>Vorname</Label>
+                  <Select 
+                    value={examMapping.studentFirstName || '__none__'} 
+                    onValueChange={(v) => setExamMapping({...examMapping, studentFirstName: v === '__none__' ? undefined : v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Spalte wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
+                      {selectedSheet.headers.map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Nachname</Label>
+                  <Select 
+                    value={examMapping.studentLastName || '__none__'} 
+                    onValueChange={(v) => setExamMapping({...examMapping, studentLastName: v === '__none__' ? undefined : v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Spalte wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Keine Spalte —</SelectItem>
+                      {selectedSheet.headers.map(h => (
+                        <SelectItem key={h} value={h}>{h}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Name (kombiniert)</Label>
                   <Select 
                     value={examMapping.studentName || '__none__'} 
                     onValueChange={(v) => setExamMapping({...examMapping, studentName: v === '__none__' ? undefined : v})}
@@ -250,6 +286,7 @@ export function ExcelUploadWizard({ type, onComplete, existingStaff }: ExcelUplo
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">Alternativ zu Vor-/Nachname</p>
                 </div>
                 
                 <div className="space-y-2">
