@@ -25,15 +25,16 @@ import {
   Search, 
   Users, 
   Clock, 
-  MapPin,
   Check,
-  AlertTriangle,
-  Calendar
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { KOMPETENZFELD_MASTER_LABEL, SLOT_DURATIONS, canBeProtocolist } from '@/types';
+import { SLOT_DURATIONS, canBeProtocolist } from '@/types';
 import type { ScheduledEvent, Exam, Degree } from '@/types';
+
+type WizardStep = 'select1' | 'select2' | 'confirm';
 
 export function MergeColloquiaDialog() {
   const { 
@@ -47,8 +48,8 @@ export function MergeColloquiaDialog() {
   const { toast } = useToast();
   
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<WizardStep>('select1');
   const [search, setSearch] = useState('');
-  const [degreeFilter, setDegreeFilter] = useState<Degree | 'all'>('all');
   const [selectedExam1, setSelectedExam1] = useState<string | null>(null);
   const [selectedExam2, setSelectedExam2] = useState<string | null>(null);
   const [selectedProtocolist, setSelectedProtocolist] = useState<string>('');
@@ -72,42 +73,40 @@ export function MergeColloquiaDialog() {
       const exam = exams.find(e => e.id === event.examId);
       return exam ? { event, exam } : null;
     }).filter((item): item is { event: ScheduledEvent; exam: Exam } => 
-      item !== null && !item.exam.isTeam // Exclude already merged exams
+      item !== null && !item.exam.isTeam
     );
   }, [versionEvents, exams]);
   
-  // Filter events
+  // Filter events based on step
   const filteredEvents = useMemo(() => {
-    return eventsWithExams.filter(({ exam }) => {
-      // Degree filter
-      if (degreeFilter !== 'all' && exam.degree !== degreeFilter) return false;
-      
-      // If exam1 is selected, only show same degree
-      if (selectedExam1) {
-        const exam1 = exams.find(e => e.id === selectedExam1);
-        if (exam1 && exam.degree !== exam1.degree) return false;
+    let items = eventsWithExams;
+    
+    // If step 2, only show same degree as exam1
+    if (step === 'select2' && selectedExam1) {
+      const exam1 = exams.find(e => e.id === selectedExam1);
+      if (exam1) {
+        items = items.filter(({ exam }) => 
+          exam.degree === exam1.degree && exam.id !== selectedExam1
+        );
       }
-      
-      // Search filter
-      if (search) {
-        const searchLower = search.toLowerCase();
+    }
+    
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      items = items.filter(({ exam }) => {
         const matchesStudent = exam.studentName.toLowerCase().includes(searchLower);
-        const matchesTopic = exam.topic.toLowerCase().includes(searchLower);
         const examiner1 = getStaffById(exam.examiner1Id);
-        const examiner2 = getStaffById(exam.examiner2Id);
-        const matchesExaminer = 
-          examiner1?.name?.toLowerCase().includes(searchLower) ||
-          examiner2?.name?.toLowerCase().includes(searchLower);
-        if (!matchesStudent && !matchesTopic && !matchesExaminer) return false;
-      }
-      
-      return true;
-    }).sort((a, b) => {
-      // Sort by date, then time
+        const matchesExaminer = examiner1?.name?.toLowerCase().includes(searchLower);
+        return matchesStudent || matchesExaminer;
+      });
+    }
+    
+    return items.sort((a, b) => {
       if (a.event.dayDate !== b.event.dayDate) return a.event.dayDate.localeCompare(b.event.dayDate);
       return a.event.startTime.localeCompare(b.event.startTime);
     });
-  }, [eventsWithExams, search, degreeFilter, selectedExam1, exams, getStaffById]);
+  }, [eventsWithExams, search, step, selectedExam1, exams, getStaffById]);
   
   // Get merged exam preview
   const mergePreview = useMemo(() => {
@@ -118,57 +117,51 @@ export function MergeColloquiaDialog() {
     if (!exam1 || !exam2) return null;
     
     const event1 = versionEvents.find(e => e.examId === selectedExam1);
-    const event2 = versionEvents.find(e => e.examId === selectedExam2);
-    if (!event1 || !event2) return null;
+    if (!event1) return null;
     
-    // Collect unique examiners
     const examinerIds = [...new Set([
-      exam1.examiner1Id,
-      exam1.examiner2Id,
-      exam2.examiner1Id,
-      exam2.examiner2Id
+      exam1.examiner1Id, exam1.examiner2Id,
+      exam2.examiner1Id, exam2.examiner2Id
     ])].filter(Boolean);
     
     const baseDuration = SLOT_DURATIONS[exam1.degree];
     const durationMinutes = baseDuration * 2;
     
-    // Use earlier event's slot
-    const earlierEvent = event1.startTime <= event2.startTime ? event1 : event2;
-    const startMinutes = parseInt(earlierEvent.startTime.split(':')[0]) * 60 + parseInt(earlierEvent.startTime.split(':')[1]);
-    const endMinutes = startMinutes + durationMinutes;
-    const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
-    
     return {
       studentNames: [exam1.studentName, exam2.studentName],
-      topic: exam1.topic === exam2.topic ? exam1.topic : `${exam1.topic} / ${exam2.topic}`,
       examinerIds,
       degree: exam1.degree,
       durationMinutes,
-      dayDate: earlierEvent.dayDate,
-      room: earlierEvent.room,
-      startTime: earlierEvent.startTime,
-      endTime,
+      dayDate: event1.dayDate,
+      room: event1.room,
+      startTime: event1.startTime,
     };
   }, [selectedExam1, selectedExam2, exams, versionEvents]);
   
-  // Get eligible protocolists
   const eligibleProtocolists = useMemo(() => {
     return staff.filter(s => canBeProtocolist(s));
   }, [staff]);
   
   const handleSelectExam = (examId: string) => {
-    if (!selectedExam1) {
+    if (step === 'select1') {
       setSelectedExam1(examId);
-    } else if (selectedExam1 === examId) {
-      setSelectedExam1(null);
-    } else if (!selectedExam2) {
+      setStep('select2');
+      setSearch('');
+    } else if (step === 'select2') {
       setSelectedExam2(examId);
-    } else if (selectedExam2 === examId) {
-      setSelectedExam2(null);
-    } else {
-      // Replace exam2
-      setSelectedExam2(examId);
+      setStep('confirm');
     }
+  };
+  
+  const handleBack = () => {
+    if (step === 'select2') {
+      setSelectedExam1(null);
+      setStep('select1');
+    } else if (step === 'confirm') {
+      setSelectedExam2(null);
+      setStep('select2');
+    }
+    setSearch('');
   };
   
   const handleMerge = () => {
@@ -197,7 +190,7 @@ export function MergeColloquiaDialog() {
     setSelectedExam2(null);
     setSelectedProtocolist('');
     setSearch('');
-    setDegreeFilter('all');
+    setStep('select1');
   };
   
   const formatDate = (dateStr: string) => {
@@ -209,241 +202,182 @@ export function MergeColloquiaDialog() {
     });
   };
   
-  const isSelected = (examId: string) => examId === selectedExam1 || examId === selectedExam2;
+  const getSelectedExamInfo = (examId: string | null) => {
+    if (!examId) return null;
+    const exam = exams.find(e => e.id === examId);
+    const event = versionEvents.find(e => e.examId === examId);
+    if (!exam || !event) return null;
+    return { exam, event };
+  };
   
+  const exam1Info = getSelectedExamInfo(selectedExam1);
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       setOpen(isOpen);
       if (!isOpen) resetSelection();
     }}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2">
           <Merge className="h-4 w-4" />
-          Kolloquien zusammenlegen
+          Zusammenlegen
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Merge className="h-5 w-5" />
-            Kolloquien zusammenlegen (Teamarbeit)
+            Team-Kolloquium erstellen
           </DialogTitle>
           <DialogDescription>
-            Wählen Sie zwei Kolloquien desselben Abschlusses aus, um sie zu einem Doppelslot zusammenzulegen.
+            {step === 'select1' && 'Wählen Sie das erste Kolloquium aus.'}
+            {step === 'select2' && 'Wählen Sie das zweite Kolloquium (gleicher Abschluss).'}
+            {step === 'confirm' && 'Bestätigen Sie die Zusammenlegung.'}
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid grid-cols-2 gap-4">
-          {/* Left: Selection list */}
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Suchen..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={degreeFilter} onValueChange={(v) => setDegreeFilter(v as Degree | 'all')}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alle</SelectItem>
-                  <SelectItem value="BA">BA</SelectItem>
-                  <SelectItem value="MA">MA</SelectItem>
-                </SelectContent>
-              </Select>
+        {/* Step indicator */}
+        <div className="flex items-center gap-2 text-sm">
+          <span className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+            step === 'select1' ? "bg-primary text-primary-foreground" : "bg-muted"
+          )}>1</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <span className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+            step === 'select2' ? "bg-primary text-primary-foreground" : "bg-muted"
+          )}>2</span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <span className={cn(
+            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+            step === 'confirm' ? "bg-primary text-primary-foreground" : "bg-muted"
+          )}>✓</span>
+        </div>
+        
+        {/* Selected exam 1 banner */}
+        {exam1Info && step !== 'select1' && (
+          <div className="flex items-center gap-3 p-2 bg-primary/10 rounded-md text-sm">
+            <Check className="h-4 w-4 text-primary" />
+            <Badge variant={exam1Info.exam.degree === 'BA' ? 'default' : 'secondary'} className="text-xs">
+              {exam1Info.exam.degree}
+            </Badge>
+            <span className="font-medium truncate">{exam1Info.exam.studentName}</span>
+            <span className="text-muted-foreground">{formatDate(exam1Info.event.dayDate)} {exam1Info.event.startTime}</span>
+            {step === 'select2' && (
+              <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={handleBack}>
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {/* List view for steps 1 & 2 */}
+        {(step === 'select1' || step === 'select2') && (
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Name oder Prüfer suchen..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
             </div>
             
-            <ScrollArea className="h-[400px] border rounded-md p-2">
+            <ScrollArea className="h-[280px] border rounded-md">
               {filteredEvents.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  Keine Kolloquien gefunden
+                <div className="p-4 text-center text-muted-foreground text-sm">
+                  Keine passenden Kolloquien gefunden
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y">
                   {filteredEvents.map(({ event, exam }) => {
                     const examiner1 = getStaffById(exam.examiner1Id);
-                    const examiner2 = getStaffById(exam.examiner2Id);
-                    const selected = isSelected(exam.id);
-                    const kompetenzfeldDisplay = exam.degree === 'MA' ? KOMPETENZFELD_MASTER_LABEL : exam.kompetenzfeld;
-                    
-                    // Disable if different degree from first selection
-                    const disabled = selectedExam1 && !selected && 
-                      exams.find(e => e.id === selectedExam1)?.degree !== exam.degree;
                     
                     return (
                       <button
                         key={event.id}
-                        onClick={() => !disabled && handleSelectExam(exam.id)}
-                        disabled={disabled}
-                        className={cn(
-                          "w-full text-left p-3 rounded-md border-2 transition-all",
-                          selected && "border-primary bg-primary/5",
-                          !selected && !disabled && "border-border hover:border-primary/50",
-                          disabled && "opacity-50 cursor-not-allowed"
-                        )}
+                        onClick={() => handleSelectExam(exam.id)}
+                        className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'} className="text-xs">
-                                {exam.degree}
-                              </Badge>
-                              {kompetenzfeldDisplay && (
-                                <Badge variant="outline" className="text-xs font-normal">
-                                  {kompetenzfeldDisplay}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="font-medium truncate">{exam.studentName}</p>
-                            <p className="text-xs text-muted-foreground truncate">{exam.topic}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(event.dayDate)}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {event.startTime}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {event.room}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {examiner1?.name} / {examiner2?.name}
-                            </div>
-                          </div>
-                          {selected && (
-                            <div className="flex-shrink-0">
-                              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                                <Check className="h-4 w-4 text-primary-foreground" />
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'} className="text-xs shrink-0">
+                          {exam.degree}
+                        </Badge>
+                        <span className="font-medium truncate flex-1">{exam.studentName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {formatDate(event.dayDate)}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {event.startTime}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0 max-w-[80px] truncate">
+                          {examiner1?.name}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       </button>
                     );
                   })}
                 </div>
               )}
             </ScrollArea>
-          </div>
-          
-          {/* Right: Preview */}
-          <div className="space-y-3">
-            <h3 className="font-semibold">Vorschau Team-Kolloquium</h3>
-            
-            {!selectedExam1 && !selectedExam2 ? (
-              <div className="border-2 border-dashed rounded-md p-8 text-center text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>Wählen Sie zwei Kolloquien aus der Liste aus</p>
-              </div>
-            ) : !mergePreview ? (
-              <div className="border-2 border-dashed rounded-md p-8 text-center text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>Wählen Sie ein zweites Kolloquium aus</p>
-                <p className="text-xs mt-2">(gleicher Abschluss erforderlich)</p>
-              </div>
-            ) : (
-              <div className="border-2 rounded-md p-4 space-y-4">
-                <div>
-                  <Badge variant={mergePreview.degree === 'BA' ? 'default' : 'secondary'} className="mb-2">
-                    {mergePreview.degree} - Teamarbeit
-                  </Badge>
-                  <h4 className="font-semibold text-lg">
-                    {mergePreview.studentNames.join(' & ')}
-                  </h4>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {mergePreview.topic}
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>{formatDate(mergePreview.dayDate)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{mergePreview.room}</span>
-                  </div>
-                  <div className="flex items-center gap-2 col-span-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">
-                      {mergePreview.startTime} – {mergePreview.endTime}
-                    </span>
-                    <Badge variant="outline" className="ml-2">
-                      {mergePreview.durationMinutes} Min.
-                    </Badge>
-                  </div>
-                </div>
-                
-                <div>
-                  <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Prüfer ({mergePreview.examinerIds.length})
-                  </p>
-                  <div className="grid grid-cols-2 gap-1 text-sm">
-                    {mergePreview.examinerIds.map((id, idx) => {
-                      const s = getStaffById(id);
-                      return (
-                        <span key={id} className="text-muted-foreground">
-                          Prüfer {idx + 1}: {s?.name || '—'}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Protokollant</label>
-                  <Select value={selectedProtocolist} onValueChange={setSelectedProtocolist}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Protokollant auswählen..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eligibleProtocolists.map(s => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Hinweis</p>
-                    <p className="text-muted-foreground">
-                      Die ursprünglichen Einzelkolloquien werden durch diesen Doppelslot ersetzt. 
-                      Konflikte müssen ggf. manuell gelöst werden.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+          </>
+        )}
         
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        {/* Confirmation view */}
+        {step === 'confirm' && mergePreview && (
+          <div className="space-y-4">
+            <div className="p-4 border-2 border-primary rounded-md bg-primary/5">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant={mergePreview.degree === 'BA' ? 'default' : 'secondary'}>
+                  {mergePreview.degree}
+                </Badge>
+                <Badge variant="outline" className="gap-1">
+                  <Users className="h-3 w-3" />
+                  Teamarbeit
+                </Badge>
+                <Badge variant="secondary">{mergePreview.durationMinutes} Min.</Badge>
+              </div>
+              <p className="font-semibold text-lg">{mergePreview.studentNames.join(' & ')}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {formatDate(mergePreview.dayDate)} • {mergePreview.startTime} • {mergePreview.room}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {mergePreview.examinerIds.length} Prüfer: {mergePreview.examinerIds.map(id => getStaffById(id)?.name).filter(Boolean).join(', ')}
+              </p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-2 block">Protokollant (optional)</label>
+              <Select value={selectedProtocolist} onValueChange={setSelectedProtocolist}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Protokollant auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleProtocolists.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+        
+        <DialogFooter className="gap-2">
+          {step !== 'select1' && (
+            <Button variant="outline" onClick={handleBack}>
+              Zurück
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => setOpen(false)}>
             Abbrechen
           </Button>
-          <Button 
-            onClick={handleMerge} 
-            disabled={!selectedExam1 || !selectedExam2}
-            className="gap-2"
-          >
-            <Merge className="h-4 w-4" />
-            Zusammenlegen
-          </Button>
+          {step === 'confirm' && (
+            <Button onClick={handleMerge} className="gap-2">
+              <Merge className="h-4 w-4" />
+              Zusammenlegen
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
