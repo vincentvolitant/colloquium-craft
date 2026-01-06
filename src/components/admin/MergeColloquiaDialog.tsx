@@ -32,13 +32,16 @@ import {
   AlertTriangle,
   AlertCircle,
   CalendarDays,
-  MapPin
+  MapPin,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { SLOT_DURATIONS, canBeProtocolist } from '@/types';
-import type { ScheduledEvent, Exam } from '@/types';
+import type { ScheduledEvent, Exam, StaffMember } from '@/types';
 import type { MergeSlotOption, MergeValidationResult } from '@/lib/scheduler';
+import { isStaffAvailableForSlot } from '@/lib/scheduler';
 
 type WizardStep = 'select1' | 'select2' | 'confirm';
 
@@ -148,9 +151,99 @@ export function MergeColloquiaDialog() {
     };
   }, [selectedExam1, selectedExam2, exams, versionEvents, selectedSlot]);
   
-  const eligibleProtocolists = useMemo(() => {
-    return staff.filter(s => canBeProtocolist(s));
-  }, [staff]);
+  // Get available protocolists for the selected slot
+  const { availableProtocolists, unavailableProtocolists } = useMemo(() => {
+    const allEligible = staff.filter(s => canBeProtocolist(s));
+    
+    if (!mergePreview) {
+      return { availableProtocolists: allEligible, unavailableProtocolists: [] };
+    }
+    
+    // Get examiner IDs to exclude
+    const examinerIds = new Set(mergePreview.examinerIds);
+    
+    const available: StaffMember[] = [];
+    const unavailable: Array<{ staff: StaffMember; reason: string }> = [];
+    
+    for (const s of allEligible) {
+      // Examiners can't be protocolists for their own exam
+      if (examinerIds.has(s.id)) {
+        unavailable.push({ staff: s, reason: 'Ist Prüfer' });
+        continue;
+      }
+      
+      // Check availability for the slot
+      const config = useScheduleStore.getState().config;
+      const isAvailable = isStaffAvailableForSlot(
+        s,
+        mergePreview.dayDate,
+        mergePreview.startTime,
+        mergePreview.durationMinutes,
+        config
+      );
+      
+      if (!isAvailable) {
+        unavailable.push({ staff: s, reason: 'Nicht verfügbar' });
+        continue;
+      }
+      
+      // Check for scheduling conflicts
+      const activeVersion = scheduleVersions.find(v => v.status === 'published') 
+        || scheduleVersions[scheduleVersions.length - 1];
+      
+      if (activeVersion) {
+        const slotStart = timeToMinutes(mergePreview.startTime);
+        const slotEnd = slotStart + mergePreview.durationMinutes;
+        
+        // Get events to check (exclude the two being merged)
+        const exam1 = exams.find(e => e.id === selectedExam1);
+        const exam2 = exams.find(e => e.id === selectedExam2);
+        const event1 = versionEvents.find(e => e.examId === selectedExam1);
+        const event2 = versionEvents.find(e => e.examId === selectedExam2);
+        
+        const hasConflict = scheduledEvents.some(e => {
+          if (e.scheduleVersionId !== activeVersion.id) return false;
+          if (e.status !== 'scheduled') return false;
+          if (e.id === event1?.id || e.id === event2?.id) return false;
+          if (e.dayDate !== mergePreview.dayDate) return false;
+          
+          const existingStart = timeToMinutes(e.startTime);
+          const existingEnd = timeToMinutes(e.endTime);
+          
+          // No overlap
+          if (slotEnd <= existingStart || slotStart >= existingEnd) return false;
+          
+          // Check if staff is involved
+          const exam = exams.find(ex => ex.id === e.examId);
+          if (!exam) return false;
+          
+          const isExaminer = exam.examiner1Id === s.id || exam.examiner2Id === s.id ||
+                            (exam.examinerIds && exam.examinerIds.includes(s.id));
+          const isProtocolist = e.protocolistId === s.id;
+          
+          return isExaminer || isProtocolist;
+        });
+        
+        if (hasConflict) {
+          unavailable.push({ staff: s, reason: 'Hat Prüfung zur gleichen Zeit' });
+          continue;
+        }
+      }
+      
+      available.push(s);
+    }
+    
+    return { 
+      availableProtocolists: available, 
+      unavailableProtocolists: unavailable 
+    };
+  }, [staff, mergePreview, exams, scheduledEvents, scheduleVersions, versionEvents, selectedExam1, selectedExam2]);
+  
+  // Helper function
+  function timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
   
   // Validate when entering confirm step or when protocolist/slot changes
   useEffect(() => {
@@ -488,17 +581,55 @@ export function MergeColloquiaDialog() {
             </div>
             
             <div>
-              <label className="text-sm font-medium mb-2 block">Protokollant (optional)</label>
-              <Select value={selectedProtocolist} onValueChange={setSelectedProtocolist}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Protokollant auswählen..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {eligibleProtocolists.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                Protokollant
+                <Badge variant="outline" className="text-xs font-normal">
+                  <UserCheck className="h-3 w-3 mr-1" />
+                  {availableProtocolists.length} verfügbar
+                </Badge>
+              </label>
+              
+              {availableProtocolists.length > 0 ? (
+                <Select value={selectedProtocolist} onValueChange={setSelectedProtocolist}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Protokollant auswählen..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableProtocolists.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        <span className="flex items-center gap-2">
+                          <UserCheck className="h-3 w-3 text-green-600" />
+                          {s.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Keine Protokollanten im gewählten Zeitraum verfügbar.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {unavailableProtocolists.length > 0 && (
+                <details className="mt-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer hover:text-foreground">
+                    {unavailableProtocolists.length} nicht verfügbar
+                  </summary>
+                  <ul className="mt-1 space-y-0.5 pl-4">
+                    {unavailableProtocolists.map(({ staff, reason }) => (
+                      <li key={staff.id} className="flex items-center gap-2">
+                        <UserX className="h-3 w-3" />
+                        <span>{staff.name}</span>
+                        <span className="text-muted-foreground">— {reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           </div>
         )}

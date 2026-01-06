@@ -370,6 +370,20 @@ function checkBreakRule(
 
 // ============ MERGE VALIDATION HELPERS ============
 
+/**
+ * Check if staff is available for a specific slot (exported for use in UI)
+ */
+export function isStaffAvailableForSlot(
+  staff: StaffMember,
+  day: string,
+  startTime: string,
+  durationMinutes: number,
+  config: ScheduleConfig
+): boolean {
+  const endTime = addMinutes(startTime, durationMinutes);
+  return isStaffAvailable(staff, day, startTime, endTime, config);
+}
+
 export interface MergeValidationResult {
   valid: boolean;
   conflicts: string[];
