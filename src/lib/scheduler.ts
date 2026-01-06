@@ -7,7 +7,7 @@ import type {
   ConflictReport,
   Degree 
 } from '@/types';
-import { SLOT_DURATIONS, canBeProtocolist } from '@/types';
+import { SLOT_DURATIONS, canBeProtocolist, getExamDuration, getAllExaminerIds } from '@/types';
 
 interface TimeSlot {
   startTime: string;
@@ -430,9 +430,12 @@ export function generateSchedule(
   });
   
   for (const exam of sortedExams) {
-    const duration = SLOT_DURATIONS[exam.degree];
+    // Use getExamDuration to handle team exams with doubled duration
+    const duration = getExamDuration(exam);
     const allowedRooms = getRoomsForExam(exam, roomMappings, staff);
     
+    // Get all examiners for team exams
+    const allExaminerIds = getAllExaminerIds(exam);
     const examiner1 = staff.find(s => s.id === exam.examiner1Id);
     const examiner2 = staff.find(s => s.id === exam.examiner2Id);
     
@@ -670,6 +673,9 @@ export function generateSchedule(
             endTime,
             protocolistId: protocolist.id,
             status: 'scheduled',
+            // Store team info in event for quick access
+            isTeam: exam.isTeam,
+            durationMinutes: duration,
           };
           
           events.push(event);

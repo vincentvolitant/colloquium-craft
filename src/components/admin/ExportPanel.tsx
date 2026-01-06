@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { exportScheduleToXLSX, exportScheduleToCSV } from '@/lib/excelParser';
 import { useToast } from '@/hooks/use-toast';
+import { getAllExaminerIds } from '@/types';
 
 export function ExportPanel() {
   const { exams, staff, scheduledEvents, scheduleVersions, getStaffById } = useScheduleStore();
@@ -17,6 +18,10 @@ export function ExportPanel() {
   const prepareExportData = () => {
     return events.map(event => {
       const exam = exams.find(e => e.id === event.examId)!;
+      // Get all examiners for team exams
+      const examinerIds = getAllExaminerIds(exam);
+      const allExaminers = examinerIds.map(id => getStaffById(id));
+      
       return {
         exam,
         event: {
@@ -26,10 +31,12 @@ export function ExportPanel() {
           endTime: event.endTime,
           status: event.status,
           cancelledReason: event.cancelledReason,
+          durationMinutes: event.durationMinutes,
         },
         protocolist: getStaffById(event.protocolistId),
         examiner1: getStaffById(exam.examiner1Id),
         examiner2: getStaffById(exam.examiner2Id),
+        allExaminers,
       };
     });
   };

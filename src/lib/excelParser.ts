@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Exam, StaffMember, Degree, EmploymentType } from '@/types';
+import { getExamDisplayNames, getAllExaminerIds } from '@/types';
 
 export interface ParsedSheet {
   name: string;
@@ -385,45 +386,66 @@ export function parseStaff(
 export function exportScheduleToXLSX(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string };
+    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
+    allExaminers?: (StaffMember | undefined)[];
   }>
 ): Blob {
   const baData = events
     .filter(e => e.exam.degree === 'BA')
-    .map(e => ({
-      'Kompetenzfeld': e.exam.kompetenzfeld || '',
-      'Name': e.exam.studentName,
-      'Thema': e.exam.topic,
-      'Prüfer 1': e.examiner1?.name || '',
-      'Prüfer 2': e.examiner2?.name || '',
-      'Protokoll': e.protocolist?.name || '',
-      'Raum': e.event.room,
-      'Datum': e.event.dayDate,
-      'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
-      'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
-      'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
-      'Absagegrund': e.event.cancelledReason || '',
-    }));
+    .map(e => {
+      const displayNames = getExamDisplayNames(e.exam);
+      const examinerIds = getAllExaminerIds(e.exam);
+      const examiners = e.allExaminers || [e.examiner1, e.examiner2];
+      
+      return {
+        'Kompetenzfeld': e.exam.kompetenzfeld || '',
+        'Name': displayNames.join(' & '),
+        'Thema': e.exam.topic,
+        'Prüfer 1': examiners[0]?.name || '',
+        'Prüfer 2': examiners[1]?.name || '',
+        'Prüfer 3': examiners[2]?.name || '',
+        'Prüfer 4': examiners[3]?.name || '',
+        'Protokoll': e.protocolist?.name || '',
+        'Raum': e.event.room,
+        'Datum': e.event.dayDate,
+        'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
+        'Dauer (Min.)': e.event.durationMinutes || e.exam.durationMinutes || 50,
+        'Teamarbeit': e.exam.isTeam ? 'JA' : '',
+        'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
+        'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+        'Absagegrund': e.event.cancelledReason || '',
+      };
+    });
   
   const maData = events
     .filter(e => e.exam.degree === 'MA')
-    .map(e => ({
-      'Kompetenzfeld': 'Master',
-      'Name': e.exam.studentName,
-      'Thema': e.exam.topic,
-      'Prüfer 1': e.examiner1?.name || '',
-      'Prüfer 2': e.examiner2?.name || '',
-      'Protokoll': e.protocolist?.name || '',
-      'Raum': e.event.room,
-      'Datum': e.event.dayDate,
-      'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
-      'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
-      'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
-      'Absagegrund': e.event.cancelledReason || '',
-    }));
+    .map(e => {
+      const displayNames = getExamDisplayNames(e.exam);
+      const examinerIds = getAllExaminerIds(e.exam);
+      const examiners = e.allExaminers || [e.examiner1, e.examiner2];
+      
+      return {
+        'Kompetenzfeld': 'Master',
+        'Name': displayNames.join(' & '),
+        'Thema': e.exam.topic,
+        'Prüfer 1': examiners[0]?.name || '',
+        'Prüfer 2': examiners[1]?.name || '',
+        'Prüfer 3': examiners[2]?.name || '',
+        'Prüfer 4': examiners[3]?.name || '',
+        'Protokoll': e.protocolist?.name || '',
+        'Raum': e.event.room,
+        'Datum': e.event.dayDate,
+        'Zeit': `${e.event.startTime} - ${e.event.endTime}`,
+        'Dauer (Min.)': e.event.durationMinutes || e.exam.durationMinutes || 75,
+        'Teamarbeit': e.exam.isTeam ? 'JA' : '',
+        'Ohne Öffentlichkeit': e.exam.isPublic ? '' : 'X',
+        'Status': e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+        'Absagegrund': e.event.cancelledReason || '',
+      };
+    });
   
   const wb = XLSX.utils.book_new();
   
@@ -444,33 +466,43 @@ export function exportScheduleToXLSX(
 export function exportScheduleToCSV(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string };
+    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
+    allExaminers?: (StaffMember | undefined)[];
   }>
 ): string {
   const headers = [
-    'Degree', 'Kompetenzfeld', 'Name', 'Thema', 'Prüfer 1', 'Prüfer 2',
-    'Protokoll', 'Raum', 'Datum', 'Start', 'Ende', 'Öffentlich', 'Status', 'Absagegrund'
+    'Degree', 'Kompetenzfeld', 'Name', 'Thema', 'Prüfer 1', 'Prüfer 2', 'Prüfer 3', 'Prüfer 4',
+    'Protokoll', 'Raum', 'Datum', 'Start', 'Ende', 'Dauer', 'Teamarbeit', 'Öffentlich', 'Status', 'Absagegrund'
   ];
   
-  const rows = events.map(e => [
-    e.exam.degree,
-    e.exam.degree === 'MA' ? 'Master' : (e.exam.kompetenzfeld || ''),
-    e.exam.studentName,
-    e.exam.topic,
-    e.examiner1?.name || '',
-    e.examiner2?.name || '',
-    e.protocolist?.name || '',
-    e.event.room,
-    e.event.dayDate,
-    e.event.startTime,
-    e.event.endTime,
-    e.exam.isPublic ? 'Ja' : 'Nein',
-    e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
-    e.event.cancelledReason || '',
-  ]);
+  const rows = events.map(e => {
+    const displayNames = getExamDisplayNames(e.exam);
+    const examiners = e.allExaminers || [e.examiner1, e.examiner2];
+    
+    return [
+      e.exam.degree,
+      e.exam.degree === 'MA' ? 'Master' : (e.exam.kompetenzfeld || ''),
+      displayNames.join(' & '),
+      e.exam.topic,
+      examiners[0]?.name || '',
+      examiners[1]?.name || '',
+      examiners[2]?.name || '',
+      examiners[3]?.name || '',
+      e.protocolist?.name || '',
+      e.event.room,
+      e.event.dayDate,
+      e.event.startTime,
+      e.event.endTime,
+      String(e.event.durationMinutes || e.exam.durationMinutes || (e.exam.degree === 'MA' ? 75 : 50)),
+      e.exam.isTeam ? 'JA' : '',
+      e.exam.isPublic ? 'Ja' : 'Nein',
+      e.event.status === 'cancelled' ? 'CANCELLED' : 'SCHEDULED',
+      e.event.cancelledReason || '',
+    ];
+  });
   
   const csvContent = [
     headers.join(';'),
