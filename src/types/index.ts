@@ -19,6 +19,13 @@ export interface Exam {
   examiner2Id: string;
   isPublic: boolean;
   notes?: string;
+  
+  // Team thesis support
+  isTeam?: boolean; // True if this is a merged team colloquium
+  studentNames?: string[]; // Array of 1-2 student names for team theses
+  examinerIds?: string[]; // Array of 1-4 examiner IDs for team theses
+  sourceExamIds?: string[]; // Original exam IDs that were merged
+  durationMinutes?: number; // Override duration: BA=100min, MA=150min for teams
 }
 
 // Helper to get full student name from Exam
@@ -106,6 +113,10 @@ export interface ScheduledEvent {
   status: ExamStatus;
   cancelledReason?: string;
   cancelledAt?: string; // ISO timestamp
+  
+  // Team thesis support
+  isTeam?: boolean; // Mirror from exam for quick access
+  durationMinutes?: number; // Actual duration (doubled for teams)
 }
 
 export interface ScheduleConfig {
@@ -149,6 +160,29 @@ export const SLOT_DURATIONS: Record<Degree, number> = {
   BA: 50,
   MA: 75,
 };
+
+// Helper to get exam duration considering team status
+export function getExamDuration(exam: Exam): number {
+  if (exam.durationMinutes) return exam.durationMinutes;
+  const baseDuration = SLOT_DURATIONS[exam.degree];
+  return exam.isTeam ? baseDuration * 2 : baseDuration;
+}
+
+// Helper to get all examiner IDs from an exam (including team examiners)
+export function getAllExaminerIds(exam: Exam): string[] {
+  if (exam.isTeam && exam.examinerIds && exam.examinerIds.length > 0) {
+    return exam.examinerIds;
+  }
+  return [exam.examiner1Id, exam.examiner2Id].filter(Boolean);
+}
+
+// Helper to get display names for team exams
+export function getExamDisplayNames(exam: Exam): string[] {
+  if (exam.isTeam && exam.studentNames && exam.studentNames.length > 0) {
+    return exam.studentNames;
+  }
+  return [exam.studentName];
+}
 
 // Employment type labels (German)
 export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
