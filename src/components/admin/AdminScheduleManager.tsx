@@ -252,155 +252,109 @@ export function AdminScheduleManager() {
         </CardContent>
       </Card>
       
-      {/* Events list */}
-      <div className="space-y-3">
+      {/* Events list - compact table-like rows */}
+      <div className="border rounded-lg overflow-hidden">
         {filteredEvents.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              Keine Termine gefunden.
-            </CardContent>
-          </Card>
+          <div className="py-8 text-center text-muted-foreground bg-card">
+            Keine Termine gefunden.
+          </div>
         ) : (
-          filteredEvents.map(event => {
-            const exam = exams.find(e => e.id === event.examId);
-            if (!exam) return null;
-            
-            const examiner1 = getStaffById(exam.examiner1Id);
-            const examiner2 = getStaffById(exam.examiner2Id);
-            const protocolist = getStaffById(event.protocolistId);
-            const isCancelled = event.status === 'cancelled';
-            const kompetenzfeldDisplay = exam.degree === 'MA' ? KOMPETENZFELD_MASTER_LABEL : exam.kompetenzfeld;
-            
-            // Team exam support
-            const isTeam = exam.isTeam;
-            const displayNames = getExamDisplayNames(exam);
-            const allExaminerIds = getAllExaminerIds(exam);
-            const allExaminers = allExaminerIds.map(id => getStaffById(id));
-            
-            return (
-              <Card 
-                key={event.id}
-                className={cn(
-                  "border-2 transition-all",
-                  isCancelled && "bg-muted/50",
-                  isTeam && "border-primary/50"
-                )}
-              >
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap gap-2 items-center mb-2">
-                        <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'}>
-                          {exam.degree}
-                        </Badge>
-                        {isTeam && (
-                          <Badge variant="outline" className="gap-1 bg-primary/10">
-                            <Users className="h-3 w-3" />
-                            Teamarbeit
-                          </Badge>
-                        )}
-                        {kompetenzfeldDisplay && (
-                          <Badge variant="outline" className="font-normal">
-                            {kompetenzfeldDisplay}
-                          </Badge>
-                        )}
-                        {isCancelled && (
-                          <Badge variant="destructive" className="gap-1">
-                            <X className="h-3 w-3" />
-                            Abgesagt
-                          </Badge>
-                        )}
-                      </div>
-                      <CardTitle className={cn(
-                        "text-lg",
-                        isCancelled && "line-through text-muted-foreground"
-                      )}>
-                        {displayNames.join(' & ')}
-                      </CardTitle>
-                      <p className={cn(
-                        "text-sm text-muted-foreground line-clamp-1",
-                        isCancelled && "line-through"
-                      )}>
-                        {exam.topic}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      {isCancelled ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => handleOpenReinstateDialog(event)}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                          Reaktivieren
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="gap-1"
-                          onClick={() => handleOpenCancelDialog(event)}
-                        >
-                          <X className="h-4 w-4" />
-                          Absagen
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4 flex-shrink-0" />
-                      <span>{formatDate(event.dayDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4 flex-shrink-0" />
-                      <span>{event.startTime} – {event.endTime}</span>
-                      {isTeam && (
-                        <Badge variant="secondary" className="text-xs ml-1">
-                          {event.durationMinutes || exam.durationMinutes} Min.
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4 flex-shrink-0" />
-                      <span>{event.room}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-muted-foreground mt-3">
-                    <Users className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      {isTeam && allExaminers.length > 0 ? (
-                        // Team: show all examiners
-                        <>
-                          {allExaminers.map((examiner, idx) => (
-                            <span key={idx}>
-                              <strong>Prüfer {idx + 1}:</strong> {examiner?.name || '—'}
-                            </span>
-                          ))}
-                          <span><strong>Protokoll:</strong> {protocolist?.name || '—'}</span>
-                        </>
-                      ) : (
-                        // Regular: show 2 examiners
-                        <>
-                          <span><strong>Prüfer 1:</strong> {examiner1?.name || '—'}</span>
-                          <span><strong>Prüfer 2:</strong> {examiner2?.name || '—'}</span>
-                          <span><strong>Protokoll:</strong> {protocolist?.name || '—'}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {isCancelled && event.cancelledReason && (
-                    <p className="mt-3 text-sm text-destructive italic">
-                      Grund: {event.cancelledReason}
-                    </p>
+          <div className="divide-y">
+            {filteredEvents.map(event => {
+              const exam = exams.find(e => e.id === event.examId);
+              if (!exam) return null;
+              
+              const examiner1 = getStaffById(exam.examiner1Id);
+              const examiner2 = getStaffById(exam.examiner2Id);
+              const protocolist = getStaffById(event.protocolistId);
+              const isCancelled = event.status === 'cancelled';
+              const isTeam = exam.isTeam;
+              const displayNames = getExamDisplayNames(exam);
+              
+              return (
+                <div 
+                  key={event.id}
+                  className={cn(
+                    "flex flex-wrap items-center gap-3 p-3 bg-card hover:bg-muted/30 transition-colors",
+                    isCancelled && "bg-muted/50 opacity-60",
+                    isTeam && "border-l-4 border-l-primary"
                   )}
-                </CardContent>
-              </Card>
-            );
-          })
+                >
+                  {/* Badges */}
+                  <div className="flex gap-1.5 shrink-0">
+                    <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'} className="text-xs">
+                      {exam.degree}
+                    </Badge>
+                    {isTeam && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Users className="h-3 w-3" />
+                        Team
+                      </Badge>
+                    )}
+                    {isCancelled && (
+                      <Badge variant="destructive" className="text-xs">
+                        Abgesagt
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Student name */}
+                  <span className={cn(
+                    "font-medium min-w-[140px] max-w-[200px] truncate",
+                    isCancelled && "line-through"
+                  )}>
+                    {displayNames.join(' & ')}
+                  </span>
+                  
+                  {/* Date & Time */}
+                  <span className="text-sm text-muted-foreground shrink-0 flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {formatDate(event.dayDate)}
+                  </span>
+                  <span className="text-sm text-muted-foreground shrink-0 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {event.startTime}–{event.endTime}
+                  </span>
+                  
+                  {/* Room */}
+                  <span className="text-sm text-muted-foreground shrink-0 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {event.room}
+                  </span>
+                  
+                  {/* Examiners (compact) */}
+                  <span className="text-xs text-muted-foreground hidden md:block max-w-[180px] truncate">
+                    {examiner1?.name}{examiner2 ? `, ${examiner2.name}` : ''}
+                  </span>
+                  
+                  {/* Actions */}
+                  <div className="ml-auto flex gap-1 shrink-0">
+                    {isCancelled ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => handleOpenReinstateDialog(event)}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Reaktivieren
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleOpenCancelDialog(event)}
+                      >
+                        <X className="h-3 w-3" />
+                        Absagen
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
       

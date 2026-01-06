@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { AdminAuthGate } from '@/components/admin/AdminAuthGate';
@@ -8,14 +9,15 @@ import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPane
 import { ExportPanel } from '@/components/admin/ExportPanel';
 import { AdminScheduleManager } from '@/components/admin/AdminScheduleManager';
 import { ScheduleImportWizard } from '@/components/admin/ScheduleImportWizard';
+import { AdminStatusDashboard } from '@/components/admin/AdminStatusDashboard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { Home, LogOut, Users, GraduationCap, Calendar, Settings, Play, Download, ListChecks, FileUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
 export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState('staff');
   const { 
     exams, 
     staff, 
@@ -26,6 +28,10 @@ export default function AdminPage() {
     logoutAdmin,
   } = useScheduleStore();
   const { toast } = useToast();
+  
+  const handleStepClick = (step: string) => {
+    setActiveTab(step);
+  };
   
   const handleExamsImport = (data: Exam[] | StaffMember[], warnings: string[]) => {
     const newExams = data as Exam[];
@@ -66,83 +72,63 @@ export default function AdminPage() {
   return (
     <AdminAuthGate>
       <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="border-b-2 bg-card sticky top-0 z-10">
-          <div className="container py-4">
+        {/* Header - simplified */}
+        <header className="border-b bg-card sticky top-0 z-10">
+          <div className="container py-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <Link to="/">
-                  <Button variant="outline" size="icon">
+                  <Button variant="ghost" size="icon">
                     <Home className="h-4 w-4" />
                   </Button>
                 </Link>
-                <div>
-                  <h1 className="text-xl font-bold">Admin-Bereich</h1>
-                  <p className="text-sm text-muted-foreground">Kolloquiumsplaner</p>
-                </div>
+                <h1 className="text-lg font-semibold">Admin</h1>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex gap-2">
-                  <Badge variant="outline" className="gap-1">
-                    <GraduationCap className="h-3 w-3" />
-                    {exams.length} Prüfungen
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    <Users className="h-3 w-3" />
-                    {staff.length} Mitarbeitende
-                  </Badge>
-                </div>
-                <Button variant="ghost" onClick={logoutAdmin} className="gap-2">
-                  <LogOut className="h-4 w-4" />
-                  Abmelden
-                </Button>
-              </div>
+              <Button variant="ghost" size="sm" onClick={logoutAdmin} className="gap-2">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Abmelden</span>
+              </Button>
             </div>
           </div>
         </header>
         
-        <main className="container py-6">
-          <Tabs defaultValue="staff" className="space-y-6">
-            <TabsList className="w-full justify-start flex-wrap h-auto gap-2 bg-transparent p-0">
-              <TabsTrigger value="staff" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">1</span>
+        <main className="container py-4 space-y-4">
+          {/* Status Dashboard */}
+          <AdminStatusDashboard onStepClick={handleStepClick} />
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1 rounded-lg">
+              <TabsTrigger value="staff" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Users className="h-4 w-4" />
-                Mitarbeitende
+                <span className="hidden sm:inline">Mitarbeitende</span>
               </TabsTrigger>
-              <TabsTrigger value="availability" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">2</span>
+              <TabsTrigger value="availability" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Calendar className="h-4 w-4" />
-                Verfügbarkeiten
+                <span className="hidden sm:inline">Verfügbarkeiten</span>
               </TabsTrigger>
-              <TabsTrigger value="exams" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">3</span>
+              <TabsTrigger value="exams" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <GraduationCap className="h-4 w-4" />
-                Prüfungen
+                <span className="hidden sm:inline">Prüfungen</span>
               </TabsTrigger>
-              <TabsTrigger value="config" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">4</span>
+              <TabsTrigger value="config" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Settings className="h-4 w-4" />
-                Räume & Tage
+                <span className="hidden sm:inline">Räume & Tage</span>
               </TabsTrigger>
-              <TabsTrigger value="generate" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">5</span>
+              <TabsTrigger value="generate" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Play className="h-4 w-4" />
-                Generieren
+                <span className="hidden sm:inline">Generieren</span>
               </TabsTrigger>
-              <TabsTrigger value="manage" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">6</span>
+              <TabsTrigger value="manage" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <ListChecks className="h-4 w-4" />
-                Termine
+                <span className="hidden sm:inline">Termine</span>
               </TabsTrigger>
-              <TabsTrigger value="export" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">7</span>
+              <TabsTrigger value="export" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Download className="h-4 w-4" />
-                Export
+                <span className="hidden sm:inline">Export</span>
               </TabsTrigger>
-              <TabsTrigger value="import" className="gap-2 border-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <span className="bg-muted text-muted-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">8</span>
+              <TabsTrigger value="import" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <FileUp className="h-4 w-4" />
-                Import
+                <span className="hidden sm:inline">Import</span>
               </TabsTrigger>
             </TabsList>
             
