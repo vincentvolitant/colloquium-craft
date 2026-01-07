@@ -14,7 +14,271 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      exams: {
+        Row: {
+          created_at: string
+          degree: string
+          examiner1_id: string | null
+          examiner2_id: string | null
+          id: string
+          is_team: boolean
+          kompetenzfeld: string
+          student_email: string | null
+          student_first_name: string
+          student_last_name: string
+          team_partner_first_name: string | null
+          team_partner_last_name: string | null
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          degree: string
+          examiner1_id?: string | null
+          examiner2_id?: string | null
+          id?: string
+          is_team?: boolean
+          kompetenzfeld: string
+          student_email?: string | null
+          student_first_name: string
+          student_last_name: string
+          team_partner_first_name?: string | null
+          team_partner_last_name?: string | null
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          degree?: string
+          examiner1_id?: string | null
+          examiner2_id?: string | null
+          id?: string
+          is_team?: boolean
+          kompetenzfeld?: string
+          student_email?: string | null
+          student_first_name?: string
+          student_last_name?: string
+          team_partner_first_name?: string | null
+          team_partner_last_name?: string | null
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exams_examiner1_id_fkey"
+            columns: ["examiner1_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exams_examiner2_id_fkey"
+            columns: ["examiner2_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_mappings: {
+        Row: {
+          created_at: string
+          degree_scope: string
+          id: string
+          kompetenzfeld: string
+          room_names: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          degree_scope: string
+          id?: string
+          kompetenzfeld: string
+          room_names?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          degree_scope?: string
+          id?: string
+          kompetenzfeld?: string
+          room_names?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rooms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      schedule_config: {
+        Row: {
+          ba_slot_minutes: number
+          created_at: string
+          days: string[]
+          end_time: string
+          id: string
+          ma_slot_minutes: number
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          ba_slot_minutes?: number
+          created_at?: string
+          days?: string[]
+          end_time?: string
+          id?: string
+          ma_slot_minutes?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Update: {
+          ba_slot_minutes?: number
+          created_at?: string
+          days?: string[]
+          end_time?: string
+          id?: string
+          ma_slot_minutes?: number
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      schedule_versions: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_events: {
+        Row: {
+          cancellation_reason: string | null
+          created_at: string
+          day_date: string
+          end_time: string
+          exam_id: string
+          id: string
+          protocolist_id: string | null
+          room: string
+          schedule_version_id: string
+          start_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          created_at?: string
+          day_date: string
+          end_time: string
+          exam_id: string
+          id?: string
+          protocolist_id?: string | null
+          room: string
+          schedule_version_id: string
+          start_time: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cancellation_reason?: string | null
+          created_at?: string
+          day_date?: string
+          end_time?: string
+          exam_id?: string
+          id?: string
+          protocolist_id?: string | null
+          room?: string
+          schedule_version_id?: string
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_events_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_events_protocolist_id_fkey"
+            columns: ["protocolist_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_events_schedule_version_id_fkey"
+            columns: ["schedule_version_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff: {
+        Row: {
+          availability_override: Json | null
+          competence_fields: string[]
+          created_at: string
+          employment_type: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          availability_override?: Json | null
+          competence_fields?: string[]
+          created_at?: string
+          employment_type: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          availability_override?: Json | null
+          competence_fields?: string[]
+          created_at?: string
+          employment_type?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
