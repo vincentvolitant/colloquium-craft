@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { supabase } from '@/integrations/supabase/client';
 import type { 
   Exam, 
   StaffMember, 
@@ -57,7 +58,7 @@ interface ScheduleState {
   setCurrentVersion: (versionId: string | null) => void;
   
   // Admin auth actions
-  authenticateAdmin: (password: string) => boolean;
+  authenticateAdmin: (password: string) => Promise<boolean>;
   logoutAdmin: () => void;
   
   // Merge actions with validation
@@ -79,8 +80,6 @@ interface ScheduleState {
   getEventsForVersion: (versionId: string) => ScheduledEvent[];
   getEventForExam: (examId: string, versionId?: string) => ScheduledEvent | undefined;
 }
-
-const ADMIN_PASSWORD = 'Admin123';
 
 const defaultConfig: ScheduleConfig = {
   days: [],
@@ -196,12 +195,26 @@ export const useScheduleStore = create<ScheduleState>()(
       })),
       setCurrentVersion: (versionId) => set({ currentVersionId: versionId }),
 
-      authenticateAdmin: (password) => {
-        const isValid = password === ADMIN_PASSWORD;
-        if (isValid) {
-          set({ isAdminAuthenticated: true });
+      authenticateAdmin: async (password) => {
+        try {
+          const { data, error } = await supabase.functions.invoke('verify-admin', {
+            body: { password }
+          });
+          
+          if (error) {
+            console.error('Auth error:', error);
+            return false;
+          }
+          
+          if (data?.success) {
+            set({ isAdminAuthenticated: true });
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.error('Auth request failed:', err);
+          return false;
         }
-        return isValid;
       },
       logoutAdmin: () => set({ isAdminAuthenticated: false }),
       

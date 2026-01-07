@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lock, AlertCircle } from 'lucide-react';
+import { Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AdminAuthGateProps {
@@ -15,26 +15,39 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
   const { isAdminAuthenticated, authenticateAdmin } = useScheduleStore();
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = authenticateAdmin(password);
+    setIsLoading(true);
+    setError(false);
     
-    if (success) {
+    try {
+      const success = await authenticateAdmin(password);
+      
+      if (success) {
+        toast({
+          title: 'Anmeldung erfolgreich',
+          description: 'Willkommen im Admin-Bereich.',
+        });
+        setPassword('');
+      } else {
+        setError(true);
+        toast({
+          title: 'Falsches Passwort',
+          description: 'Bitte versuchen Sie es erneut.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
       toast({
-        title: 'Anmeldung erfolgreich',
-        description: 'Willkommen im Admin-Bereich.',
-      });
-      setPassword('');
-      setError(false);
-    } else {
-      setError(true);
-      toast({
-        title: 'Falsches Passwort',
-        description: 'Bitte versuchen Sie es erneut.',
+        title: 'Verbindungsfehler',
+        description: 'Bitte überprüfen Sie Ihre Internetverbindung.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -77,8 +90,15 @@ export function AdminAuthGate({ children }: AdminAuthGateProps) {
                 </p>
               )}
             </div>
-            <Button type="submit" className="w-full">
-              Anmelden
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Prüfe...
+                </>
+              ) : (
+                'Anmelden'
+              )}
             </Button>
           </form>
         </CardContent>
