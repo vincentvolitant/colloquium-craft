@@ -152,7 +152,20 @@ supabase functions new verify-admin
 
 # Code einfügen (Datei: supabase/functions/verify-admin/index.ts)
 # Inhalt: siehe Code oben
+```
 
+**Wichtig:** Erstelle/aktualisiere die Datei `supabase/config.toml` mit folgender Konfiguration:
+
+```toml
+project_id = "DEINE_PROJECT_ID"
+
+[functions.verify-admin]
+verify_jwt = false
+```
+
+Diese Konfiguration ist **erforderlich**, da die `verify-admin` Function keine JWT-Authentifizierung verwendet (sie prüft nur das Admin-Passwort). Ohne `verify_jwt = false` erhältst du einen "Invalid JWT" Fehler.
+
+```bash
 # Deployen
 supabase functions deploy verify-admin
 ```
@@ -317,6 +330,14 @@ npm run build
 ### Edge Function antwortet nicht
 
 → Überprüfe in den Supabase Logs unter **Edge Functions** → **Logs**.
+
+### "Invalid JWT" Fehler beim Admin-Login
+
+→ Die `verify-admin` Edge Function benötigt `verify_jwt = false` in der `supabase/config.toml`. Siehe Schritt 3, Option B für die korrekte Konfiguration. Nach dem Ändern der config.toml muss die Function erneut deployed werden:
+
+```bash
+supabase functions deploy verify-admin
+```
 
 ---
 
