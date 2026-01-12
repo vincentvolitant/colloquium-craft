@@ -61,6 +61,7 @@ interface ScheduleState {
   setStaff: (staff: StaffMember[]) => void;
   addOrUpdateStaff: (newStaff: StaffMember[], resetAvailability?: boolean) => void;
   updateStaffAvailability: (staffId: string, override: AvailabilityOverride | undefined) => void;
+  updateStaffProtocolStatus: (staffId: string, canDoProtocol: boolean) => void;
   setRooms: (rooms: Room[]) => void;
   setRoomMappings: (mappings: RoomMapping[]) => void;
   updateRoomMapping: (mapping: RoomMapping) => void;
@@ -194,6 +195,16 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
   },
   updateStaffAvailability: (staffId, override) => {
     const updated = get().staff.map((s) => (s.id === staffId ? { ...s, availabilityOverride: override } : s));
+    set({ staff: updated });
+    const member = updated.find((s) => s.id === staffId);
+    if (member) updateStaffMember(member);
+  },
+  updateStaffProtocolStatus: (staffId, canDoProtocol) => {
+    const updated = get().staff.map((s) => 
+      s.id === staffId 
+        ? { ...s, canDoProtocol, canProtocol: s.employmentType === 'internal' && canDoProtocol } 
+        : s
+    );
     set({ staff: updated });
     const member = updated.find((s) => s.id === staffId);
     if (member) updateStaffMember(member);
