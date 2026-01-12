@@ -124,6 +124,7 @@ export function ScheduleImportWizard() {
     
     // Keep track of existing exams by student name to avoid duplicates
     const existingExamsByStudent = new Map(exams.map(e => [e.studentName.toLowerCase(), e]));
+    const updatedExistingExams: Exam[] = [];
     
     for (const row of importRows) {
       const studentKey = row.studentName.toLowerCase();
@@ -131,7 +132,14 @@ export function ScheduleImportWizard() {
       // Check if exam already exists
       let exam = existingExamsByStudent.get(studentKey);
       
-      if (!exam) {
+      if (exam) {
+        // Update existing exam's isPublic if explicitly set in import
+        if (row.isPublicExplicit && exam.isPublic !== row.isPublic) {
+          exam = { ...exam, isPublic: row.isPublic };
+          updatedExistingExams.push(exam);
+          existingExamsByStudent.set(studentKey, exam);
+        }
+      } else {
         // Create new exam
         exam = {
           id: crypto.randomUUID(),
@@ -164,8 +172,13 @@ export function ScheduleImportWizard() {
       newEvents.push(event);
     }
     
-    // Merge with existing exams (keep existing, add new)
-    const mergedExams = [...exams];
+    // Merge with existing exams (keep existing unless updated, add new)
+    const mergedExams = exams.map(existingExam => {
+      // Check if this exam was updated
+      const updated = updatedExistingExams.find(u => u.id === existingExam.id);
+      return updated || existingExam;
+    });
+    // Add new exams
     for (const newExam of newExams) {
       if (!mergedExams.some(e => e.studentName.toLowerCase() === newExam.studentName.toLowerCase())) {
         mergedExams.push(newExam);
@@ -177,7 +190,6 @@ export function ScheduleImportWizard() {
     // Keep only events from OTHER versions, then add new events
     const otherVersionEvents = scheduledEvents.filter(e => e.scheduleVersionId !== versionId);
     setScheduledEvents([...otherVersionEvents, ...newEvents]);
-    
     toast({
       title: 'Import erfolgreich',
       description: `${newEvents.length} Termine wurden als Entwurf importiert.`,

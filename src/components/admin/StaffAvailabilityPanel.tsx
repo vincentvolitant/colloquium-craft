@@ -6,9 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, Clock, User, AlertTriangle, Check, Edit2, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Calendar, Clock, User, AlertTriangle, Check, Edit2, X, UserX, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { StaffMember, AvailabilityOverride, TimeWindow } from '@/types';
@@ -222,7 +224,7 @@ function EditAvailabilityDialog({ staff, configDays, onSave }: EditDialogProps) 
 }
 
 export function StaffAvailabilityPanel() {
-  const { staff, config, updateStaffAvailability } = useScheduleStore();
+  const { staff, config, updateStaffAvailability, updateStaffProtocolStatus } = useScheduleStore();
   
   if (staff.length === 0) {
     return (
@@ -283,13 +285,13 @@ export function StaffAvailabilityPanel() {
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             <User className="h-4 w-4" />
             Interne Mitarbeitende ({internalStaff.length})
-            <Badge variant="outline" className="ml-2">können protokollieren</Badge>
           </h3>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Kompetenzfeld</TableHead>
+                <TableHead>Darf Protokoll?</TableHead>
                 <TableHead>Verfügbarkeit</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
@@ -299,6 +301,30 @@ export function StaffAvailabilityPanel() {
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell>{s.primaryCompetenceField || '-'}</TableCell>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={s.canDoProtocol !== false}
+                              onCheckedChange={(checked) => updateStaffProtocolStatus(s.id, checked)}
+                            />
+                            {s.canDoProtocol !== false ? (
+                              <UserCheck className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <UserX className="h-4 w-4 text-orange-600" />
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {s.canDoProtocol !== false 
+                            ? 'Darf als Protokollant eingeteilt werden'
+                            : 'Wird nicht als Protokollant eingeteilt (z.B. Dekan)'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {getAvailabilityBadges(s, config.days)}
