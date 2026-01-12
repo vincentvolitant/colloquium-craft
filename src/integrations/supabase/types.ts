@@ -21,6 +21,7 @@ export type Database = {
           examiner1_id: string | null
           examiner2_id: string | null
           id: string
+          is_public: boolean
           is_team: boolean
           kompetenzfeld: string
           student_email: string | null
@@ -37,6 +38,7 @@ export type Database = {
           examiner1_id?: string | null
           examiner2_id?: string | null
           id?: string
+          is_public?: boolean
           is_team?: boolean
           kompetenzfeld: string
           student_email?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           examiner1_id?: string | null
           examiner2_id?: string | null
           id?: string
+          is_public?: boolean
           is_team?: boolean
           kompetenzfeld?: string
           student_email?: string | null
@@ -252,6 +255,7 @@ export type Database = {
       staff: {
         Row: {
           availability_override: Json | null
+          can_do_protocol: boolean
           competence_fields: string[]
           created_at: string
           employment_type: string
@@ -261,6 +265,7 @@ export type Database = {
         }
         Insert: {
           availability_override?: Json | null
+          can_do_protocol?: boolean
           competence_fields?: string[]
           created_at?: string
           employment_type: string
@@ -270,6 +275,7 @@ export type Database = {
         }
         Update: {
           availability_override?: Json | null
+          can_do_protocol?: boolean
           competence_fields?: string[]
           created_at?: string
           employment_type?: string

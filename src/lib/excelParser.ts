@@ -362,9 +362,9 @@ export function parseStaff(
     // Parse notes
     const notes = mapping.notes ? String(row[mapping.notes] || '').trim() : undefined;
     
-    // canProtocol is derived from employmentType: only internal can protocol
+    // canDoProtocol: default to true for internal, false for external/adjunct
     // External and adjunct can NEVER be protocolists (hard rule)
-    const canProtocol = employmentType === 'internal';
+    const canDoProtocol = employmentType === 'internal';
     
     staff.push({
       id: crypto.randomUUID(),
@@ -373,7 +373,8 @@ export function parseStaff(
       primaryCompetenceField,
       secondaryCompetenceFields,
       canExamine: true, // All staff can examine
-      canProtocol,
+      canDoProtocol,
+      canProtocol: canDoProtocol, // Combined rule: internal AND canDoProtocol
       employmentType,
       notes,
       // No availabilityOverride - will be set via UI
@@ -526,6 +527,7 @@ export interface ScheduleImportRow {
   startTime: string;
   endTime: string;
   isPublic: boolean;
+  isPublicExplicit: boolean; // Whether the public flag was explicitly set in import
   status: 'SCHEDULED' | 'CANCELLED';
   cancelledReason?: string;
 }
@@ -588,15 +590,48 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
         endTime = getValue(['ende', 'end', 'bis']);
       }
       
-      // Parse public flag
-      const publicValue = getValue(['öffentlich', 'public', 'ohne öffentlichkeit']);
-      const isPublic = !publicValue || !['x', 'ja', 'yes', '1', 'true', 'nein'].some(v => 
-        publicValue.toLowerCase().includes(v) && publicValue.toLowerCase().includes('ohne')
-      );
+      // Parse public flag - explicit column parsing for roundtrip preservation
+      // Column names we export: "Ohne Öffentlichkeit" (X = not public)
+      const ohneOeffentlichkeitValue = getValue(['ohne öffentlichkeit']);
+      const publicValue = getValue(['öffentlich', 'public']);
       
-      // Parse status
+      let isPublic = true; // Default if column missing
+      let isPublicExplicit = false;
+      
+      if (ohneOeffentlichkeitValue) {
+        isPublicExplicit = true;
+        const val = ohneOeffentlichkeitValue.toLowerCase().trim();
+        // "X", "JA", "YES", "TRUE", "1" in "Ohne Öffentlichkeit" column = NOT public
+        if (['x', 'ja', 'yes', 'true', '1'].includes(val) || val.length > 0) {
+          isPublic = false;
+        } else if (['', 'nein', 'no', 'false', '0'].includes(val)) {
+          isPublic = true;
+        }
+      } else if (publicValue) {
+        isPublicExplicit = true;
+        const val = publicValue.toLowerCase().trim();
+        // Direct "Öffentlich" or "Public" column: "Ja"/"Yes"/"True" = public
+        if (['ja', 'yes', 'true', '1'].includes(val)) {
+          isPublic = true;
+        } else if (['nein', 'no', 'false', '0', 'x'].includes(val)) {
+          isPublic = false;
+        } else {
+          // Unknown value - add error
+          errors.push(`Zeile ${rowNum} (${sheet.name}): Unbekannter Wert "${publicValue}" für Öffentlichkeit. Erwartet: Ja/Nein`);
+        }
+      }
+      
+      // Parse status - explicit for roundtrip
       const statusValue = getValue(['status']);
-      const status: 'SCHEDULED' | 'CANCELLED' = statusValue.toUpperCase() === 'CANCELLED' ? 'CANCELLED' : 'SCHEDULED';
+      let status: 'SCHEDULED' | 'CANCELLED' = 'SCHEDULED';
+      if (statusValue) {
+        const val = statusValue.toUpperCase().trim();
+        if (val === 'CANCELLED' || val === 'ABGESAGT') {
+          status = 'CANCELLED';
+        } else if (val !== 'SCHEDULED' && val !== 'GEPLANT' && val !== '') {
+          warnings.push(`Zeile ${rowNum} (${sheet.name}): Unbekannter Status "${statusValue}", wird als SCHEDULED interpretiert`);
+        }
+      }
       const cancelledReason = getValue(['absagegrund', 'cancelled reason', 'grund']);
       
       // Validate required fields
@@ -626,6 +661,7 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
         startTime,
         endTime,
         isPublic,
+        isPublicExplicit,
         status,
         cancelledReason: cancelledReason || undefined,
       });
