@@ -211,8 +211,8 @@ export function AdminScheduleManager() {
       </div>
       
       {/* Events by day */}
-      <ScrollArea className="h-[600px]">
-        <div className="space-y-6 pr-4">
+      <ScrollArea className="h-[600px] w-full">
+        <div className="space-y-6 pr-4 overflow-hidden">
           {Array.from(eventsByDay.entries()).map(([day, dayEvents]) => (
             <div key={day}>
               <div className="sticky top-0 bg-background/95 backdrop-blur py-2 mb-2 z-10">
@@ -232,9 +232,9 @@ export function AdminScheduleManager() {
                   const isCancelled = event.status === 'cancelled';
                   
                   return (
-                    <Card key={event.id} className={`${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
+                    <Card key={event.id} className={`overflow-hidden ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
                       <CardContent className="p-3">
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
                           {/* Time & Room */}
                           <div className="w-24 shrink-0">
                             <div className="flex items-center gap-1 font-mono text-sm">
@@ -293,7 +293,7 @@ export function AdminScheduleManager() {
                           {/* Actions */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
