@@ -20,8 +20,12 @@ function mapDbStaff(row: {
   competence_fields: string[];
   employment_type: string;
   availability_override: unknown;
+  can_do_protocol?: boolean;
 }): StaffMember {
   const override = row.availability_override as AvailabilityOverride | null;
+  const isInternal = row.employment_type === 'internal';
+  // canDoProtocol from DB, default true for internal, false for external/adjunct
+  const canDoProtocol = row.can_do_protocol ?? isInternal;
   return {
     id: row.id,
     name: row.name,
@@ -29,7 +33,9 @@ function mapDbStaff(row: {
     primaryCompetenceField: row.competence_fields?.[0] || null,
     employmentType: row.employment_type as 'internal' | 'external' | 'adjunct',
     canExamine: true,
-    canProtocol: row.employment_type === 'internal',
+    canDoProtocol,
+    // Combined rule: internal AND canDoProtocol
+    canProtocol: isInternal && canDoProtocol,
     availabilityOverride: override || undefined,
   };
 }
@@ -41,6 +47,7 @@ function mapStaffToDb(staff: StaffMember): {
   competence_fields: string[];
   employment_type: string;
   availability_override: Record<string, unknown> | null;
+  can_do_protocol: boolean;
 } {
   return {
     id: staff.id,
@@ -50,6 +57,7 @@ function mapStaffToDb(staff: StaffMember): {
     availability_override: staff.availabilityOverride
       ? (JSON.parse(JSON.stringify(staff.availabilityOverride)) as Record<string, unknown>)
       : null,
+    can_do_protocol: staff.canDoProtocol ?? (staff.employmentType === 'internal'),
   };
 }
 
@@ -67,6 +75,7 @@ function mapDbExam(row: {
   is_team: boolean;
   team_partner_first_name: string | null;
   team_partner_last_name: string | null;
+  is_public?: boolean;
 }): Exam {
   const studentName = [row.student_first_name, row.student_last_name].filter(Boolean).join(' ');
   const teamPartnerName = row.is_team && row.team_partner_first_name
@@ -83,7 +92,7 @@ function mapDbExam(row: {
     topic: row.topic,
     examiner1Id: row.examiner1_id || '',
     examiner2Id: row.examiner2_id || '',
-    isPublic: true,
+    isPublic: row.is_public ?? true,
     isTeam: row.is_team,
     studentNames: row.is_team && teamPartnerName ? [studentName, teamPartnerName] : undefined,
   };
@@ -116,6 +125,7 @@ function mapExamToDb(exam: Exam) {
     is_team: exam.isTeam || false,
     team_partner_first_name: teamPartnerFirst,
     team_partner_last_name: teamPartnerLast,
+    is_public: exam.isPublic ?? true,
   };
 }
 

@@ -66,7 +66,8 @@ export interface StaffMember {
   primaryCompetenceField: string | null;
   secondaryCompetenceFields?: string[];
   canExamine: boolean;
-  canProtocol: boolean; // Derived from employmentType: only internal can protocol
+  canProtocol: boolean; // Combined: must be internal AND canDoProtocol===true
+  canDoProtocol: boolean; // Manual admin override - defaults to true for internal, false for external/adjunct
   employmentType: EmploymentType;
   // UI-defined availability (replaces old availabilityConstraints)
   availabilityOverride?: AvailabilityOverride;
@@ -192,6 +193,10 @@ export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
 };
 
 // Helper to check if staff can be assigned as protocolist
+// Rule: must be internal AND have canDoProtocol === true
 export function canBeProtocolist(staff: StaffMember): boolean {
-  return staff.employmentType === 'internal' && staff.canProtocol;
+  // External and adjunct can NEVER do protocol (hard rule)
+  if (staff.employmentType !== 'internal') return false;
+  // Internal staff can be excluded via manual toggle
+  return staff.canDoProtocol !== false;
 }
