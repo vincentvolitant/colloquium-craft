@@ -237,7 +237,7 @@ export function AdminScheduleManager() {
                         {/* Grid layout: Time/Room | Content | Actions */}
                         <div className="grid grid-cols-[7rem_minmax(0,1fr)_auto] gap-4 items-start">
                           {/* Time & Room */}
-                          <div className="shrink-0 border-r border-border pr-3">
+                          <div className="shrink-0 border-r border-border pr-4">
                             <div className="flex items-center gap-1.5 font-mono text-sm">
                               <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
                               <span className="whitespace-nowrap">{event.startTime}–{event.endTime}</span>
