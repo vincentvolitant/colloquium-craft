@@ -235,14 +235,14 @@ export function AdminScheduleManager() {
                     <Card key={event.id} className={`w-full ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
                       <CardContent className="p-3">
                         {/* Grid layout: Time/Room | Content | Actions */}
-                        <div className="grid grid-cols-[6rem_minmax(0,1fr)_auto] gap-3 items-start">
+                        <div className="grid grid-cols-[7rem_minmax(0,1fr)_auto] gap-4 items-start">
                           {/* Time & Room */}
-                          <div className="shrink-0">
-                            <div className="flex items-center gap-1 font-mono text-sm">
+                          <div className="shrink-0 border-r border-border pr-3">
+                            <div className="flex items-center gap-1.5 font-mono text-sm">
                               <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
                               <span className="whitespace-nowrap">{event.startTime}–{event.endTime}</span>
                             </div>
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
                               <MapPin className="h-3 w-3 shrink-0" />
                               <span className="truncate">{event.room}</span>
                             </div>
