@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useScheduleStore } from '@/store/scheduleStore';
 import { ExamCard } from '@/components/schedule/ExamCard';
+import { ExamDetailDialog } from '@/components/schedule/ExamDetailDialog';
 import { ScheduleFilters } from '@/components/schedule/ScheduleFilters';
 import { GanttView } from '@/components/schedule/GanttView';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,9 @@ export function PublicScheduleView() {
   
   // View mode state
   const [viewMode, setViewMode] = useState<'cards' | 'gantt'>('cards');
+  
+  // Selected event for detail dialog
+  const [selectedEvent, setSelectedEvent] = useState<{ event: ScheduledEvent; exam: Exam } | null>(null);
   
   // Filter state
   const [search, setSearch] = useState('');
@@ -349,6 +353,7 @@ export function PublicScheduleView() {
                                       examiner2={getStaffById(exam.examiner2Id)}
                                       protocolist={getStaffById(event.protocolistId)}
                                       allExaminers={exam.isTeam ? allExaminers : undefined}
+                                      onClick={() => setSelectedEvent({ event, exam })}
                                     />
                                   );
                                 })}
@@ -372,6 +377,20 @@ export function PublicScheduleView() {
           <p>Kolloquiumsplaner • Gemacht mit Liebe im IxD Lab.</p>
         </div>
       </footer>
+      
+      {/* Exam Detail Dialog */}
+      {selectedEvent && (
+        <ExamDetailDialog
+          open={!!selectedEvent}
+          onOpenChange={(open) => !open && setSelectedEvent(null)}
+          exam={selectedEvent.exam}
+          event={selectedEvent.event}
+          examiner1={getStaffById(selectedEvent.exam.examiner1Id)}
+          examiner2={getStaffById(selectedEvent.exam.examiner2Id)}
+          protocolist={getStaffById(selectedEvent.event.protocolistId)}
+          allExaminers={selectedEvent.exam.isTeam ? getAllExaminerIds(selectedEvent.exam).map(id => getStaffById(id)) : undefined}
+        />
+      )}
     </div>
   );
 }
