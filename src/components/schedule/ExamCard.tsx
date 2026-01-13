@@ -13,9 +13,10 @@ interface ExamCardProps {
   protocolist?: StaffMember;
   // For team exams, pass all examiners
   allExaminers?: (StaffMember | undefined)[];
+  onClick?: () => void;
 }
 
-export function ExamCard({ exam, event, examiner1, examiner2, protocolist, allExaminers }: ExamCardProps) {
+export function ExamCard({ exam, event, examiner1, examiner2, protocolist, allExaminers, onClick }: ExamCardProps) {
   const isCancelled = event.status === 'cancelled';
   const kompetenzfeldDisplay = exam.degree === 'MA' ? KOMPETENZFELD_MASTER_LABEL : exam.kompetenzfeld;
   const isTeam = exam.isTeam;
@@ -34,11 +35,15 @@ export function ExamCard({ exam, event, examiner1, examiner2, protocolist, allEx
       : [examiner1, examiner2];
   
   return (
-    <Card className={cn(
-      "border-2 transition-all hover:shadow-md",
-      isCancelled && "opacity-60 bg-muted",
-      isTeam && "border-primary/50"
-    )}>
+    <Card 
+      className={cn(
+        "border-2 transition-all hover:shadow-md",
+        isCancelled && "opacity-60 bg-muted",
+        isTeam && "border-primary/50",
+        onClick && "cursor-pointer hover:border-primary/70"
+      )}
+      onClick={onClick}
+    >
       <CardHeader className="pb-2 pt-4 px-4">
         <div className="flex flex-wrap gap-2 items-center mb-2">
           <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'}>
