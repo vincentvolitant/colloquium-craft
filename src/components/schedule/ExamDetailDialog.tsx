@@ -44,8 +44,14 @@ export function ExamDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex flex-wrap gap-2 items-center mb-3">
+        <DialogHeader className="pr-8">
+          <DialogTitle className={cn(
+            "text-xl font-bold leading-tight",
+            isCancelled && "line-through"
+          )}>
+            {displayNames}
+          </DialogTitle>
+          <div className="flex flex-wrap gap-2 items-center pt-3">
             <Badge variant={exam.degree === 'BA' ? 'default' : 'secondary'}>
               {exam.degree}
             </Badge>
@@ -69,7 +75,7 @@ export function ExamDetailDialog({
             <Badge 
               variant={exam.isPublic ? 'outline' : 'secondary'}
               className={cn(
-                "ml-auto gap-1",
+                "gap-1",
                 !exam.isPublic && "bg-accent"
               )}
             >
@@ -86,12 +92,6 @@ export function ExamDetailDialog({
               )}
             </Badge>
           </div>
-          <DialogTitle className={cn(
-            "text-xl font-bold leading-tight",
-            isCancelled && "line-through"
-          )}>
-            {displayNames}
-          </DialogTitle>
         </DialogHeader>
         
         <div className="space-y-6 mt-4">
