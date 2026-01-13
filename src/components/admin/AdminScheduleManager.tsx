@@ -3,7 +3,7 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea removed - using plain div for better overflow handling
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -211,7 +211,7 @@ export function AdminScheduleManager() {
       </div>
       
       {/* Events by day */}
-      <ScrollArea className="h-[600px] w-full">
+      <div className="h-[600px] overflow-y-auto overflow-x-hidden w-full">
         <div className="space-y-6 pr-4">
           {Array.from(eventsByDay.entries()).map(([day, dayEvents]) => (
             <div key={day}>
@@ -232,98 +232,98 @@ export function AdminScheduleManager() {
                   const isCancelled = event.status === 'cancelled';
                   
                   return (
-                    <Card key={event.id} className={`w-full max-w-full ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
-                      <CardContent className="p-3 relative">
-                        {/* Actions - absolutely positioned */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-2 right-2 z-10">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleChangeProtocolist(event)}>
-                              <Users className="h-4 w-4 mr-2" />
-                              Protokollant ändern
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleMoveEvent(event)}>
-                              <ArrowRight className="h-4 w-4 mr-2" />
-                              Termin verschieben
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {isCancelled ? (
-                              <DropdownMenuItem onClick={() => handleReschedule(event)}>
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Wiederherstellen
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem 
-                                onClick={() => handleCancelClick(event)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <XCircle className="h-4 w-4 mr-2" />
-                                Absagen
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        
-                        <div className="flex items-start gap-3 pr-10">
+                    <Card key={event.id} className={`w-full ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
+                      <CardContent className="p-3">
+                        {/* Grid layout: Time/Room | Content | Actions */}
+                        <div className="grid grid-cols-[6rem_minmax(0,1fr)_auto] gap-3 items-start">
                           {/* Time & Room */}
-                          <div className="w-24 shrink-0">
+                          <div className="shrink-0">
                             <div className="flex items-center gap-1 font-mono text-sm">
-                              <Clock className="h-3 w-3 text-muted-foreground" />
-                              {event.startTime}–{event.endTime}
+                              <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="whitespace-nowrap">{event.startTime}–{event.endTime}</span>
                             </div>
                             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                              <MapPin className="h-3 w-3" />
-                              {event.room}
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{event.room}</span>
                             </div>
                           </div>
                           
                           {/* Exam info */}
-                          <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                              <span className="font-medium truncate">{exam?.studentName}</span>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium truncate max-w-[200px]">{exam?.studentName}</span>
                               {exam?.isTeam && (
-                                <Badge variant="outline" className="text-xs">Team</Badge>
+                                <Badge variant="outline" className="text-xs shrink-0">Team</Badge>
                               )}
-                              <Badge variant="secondary" className="text-xs">{exam?.degree}</Badge>
+                              <Badge variant="secondary" className="text-xs shrink-0">{exam?.degree}</Badge>
                               {isCancelled && (
-                                <Badge variant="destructive" className="text-xs">Abgesagt</Badge>
+                                <Badge variant="destructive" className="text-xs shrink-0">Abgesagt</Badge>
                               )}
                               {exam?.isPublic === false && (
-                                <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                                <Badge variant="outline" className="text-xs shrink-0 bg-yellow-50 text-yellow-700 border-yellow-200">
                                   Nicht öffentlich
                                 </Badge>
                               )}
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1 truncate">
+                            <div className="text-xs text-muted-foreground mt-1 line-clamp-2 break-words">
                               {exam?.topic}
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-                              <span className="flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                P1: {examiner1?.name || '—'}
+                              <span className="flex items-center gap-1 min-w-0">
+                                <User className="h-3 w-3 shrink-0" />
+                                <span className="truncate">P1: {examiner1?.name || '—'}</span>
                               </span>
                               {examiner2 && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  P2: {examiner2.name}
+                                <span className="flex items-center gap-1 min-w-0">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">P2: {examiner2.name}</span>
                                 </span>
                               )}
-                              <span className="flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                Prot: {protocolist?.name || '—'}
+                              <span className="flex items-center gap-1 min-w-0">
+                                <Users className="h-3 w-3 shrink-0" />
+                                <span className="truncate">Prot: {protocolist?.name || '—'}</span>
                               </span>
                             </div>
                             {isCancelled && event.cancelledReason && (
-                              <div className="text-xs text-destructive mt-1">
+                              <div className="text-xs text-destructive mt-1 break-words">
                                 Grund: {event.cancelledReason}
                               </div>
                             )}
                           </div>
                           
+                          {/* Actions dropdown - in grid, always visible */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 bg-background/80 hover:bg-accent">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleChangeProtocolist(event)}>
+                                <Users className="h-4 w-4 mr-2" />
+                                Protokollant ändern
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleMoveEvent(event)}>
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                Termin verschieben
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {isCancelled ? (
+                                <DropdownMenuItem onClick={() => handleReschedule(event)}>
+                                  <RefreshCw className="h-4 w-4 mr-2" />
+                                  Wiederherstellen
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem 
+                                  onClick={() => handleCancelClick(event)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Absagen
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </CardContent>
                     </Card>
@@ -333,7 +333,7 @@ export function AdminScheduleManager() {
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
       
       {/* Cancel Dialog */}
       <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
