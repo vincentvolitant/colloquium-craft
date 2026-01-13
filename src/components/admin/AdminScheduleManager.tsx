@@ -212,7 +212,7 @@ export function AdminScheduleManager() {
       
       {/* Events by day */}
       <ScrollArea className="h-[600px] w-full">
-        <div className="space-y-6 pr-4 overflow-hidden">
+        <div className="space-y-6 pr-4">
           {Array.from(eventsByDay.entries()).map(([day, dayEvents]) => (
             <div key={day}>
               <div className="sticky top-0 bg-background/95 backdrop-blur py-2 mb-2 z-10">
@@ -232,9 +232,43 @@ export function AdminScheduleManager() {
                   const isCancelled = event.status === 'cancelled';
                   
                   return (
-                    <Card key={event.id} className={`overflow-hidden ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-3 min-w-0">
+                    <Card key={event.id} className={`w-full max-w-full ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
+                      <CardContent className="p-3 relative">
+                        {/* Actions - absolutely positioned */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 absolute top-2 right-2 z-10">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleChangeProtocolist(event)}>
+                              <Users className="h-4 w-4 mr-2" />
+                              Protokollant ändern
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleMoveEvent(event)}>
+                              <ArrowRight className="h-4 w-4 mr-2" />
+                              Termin verschieben
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {isCancelled ? (
+                              <DropdownMenuItem onClick={() => handleReschedule(event)}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Wiederherstellen
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleCancelClick(event)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Absagen
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        
+                        <div className="flex items-start gap-3 pr-10">
                           {/* Time & Room */}
                           <div className="w-24 shrink-0">
                             <div className="flex items-center gap-1 font-mono text-sm">
@@ -267,7 +301,7 @@ export function AdminScheduleManager() {
                             <div className="text-xs text-muted-foreground mt-1 truncate">
                               {exam?.topic}
                             </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
                               <span className="flex items-center gap-1">
                                 <User className="h-3 w-3" />
                                 P1: {examiner1?.name || '—'}
@@ -290,39 +324,6 @@ export function AdminScheduleManager() {
                             )}
                           </div>
                           
-                          {/* Actions */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleChangeProtocolist(event)}>
-                                <Users className="h-4 w-4 mr-2" />
-                                Protokollant ändern
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleMoveEvent(event)}>
-                                <ArrowRight className="h-4 w-4 mr-2" />
-                                Termin verschieben
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {isCancelled ? (
-                                <DropdownMenuItem onClick={() => handleReschedule(event)}>
-                                  <RefreshCw className="h-4 w-4 mr-2" />
-                                  Wiederherstellen
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem 
-                                  onClick={() => handleCancelClick(event)}
-                                  className="text-destructive focus:text-destructive"
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" />
-                                  Absagen
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </CardContent>
                     </Card>
