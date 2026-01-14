@@ -16,6 +16,7 @@ CREATE TABLE public.staff (
     name TEXT NOT NULL,
     competence_fields TEXT[] NOT NULL DEFAULT '{}',
     employment_type TEXT NOT NULL CHECK (employment_type IN ('internal', 'external', 'adjunct')),
+    can_do_protocol BOOLEAN NOT NULL DEFAULT true,
     availability_override JSONB,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
@@ -40,6 +41,7 @@ CREATE TABLE public.exams (
     is_team BOOLEAN NOT NULL DEFAULT false,
     team_partner_first_name TEXT,
     team_partner_last_name TEXT,
+    is_public BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
