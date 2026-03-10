@@ -123,6 +123,10 @@ export default function AdminPage() {
                 <ListChecks className="h-4 w-4" />
                 <span className="hidden sm:inline">Termine</span>
               </TabsTrigger>
+              <TabsTrigger value="table" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+                <Table2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Tabelle</span>
+              </TabsTrigger>
               <TabsTrigger value="export" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Download className="h-4 w-4" />
                 <span className="hidden sm:inline">Export</span>
