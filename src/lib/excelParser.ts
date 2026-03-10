@@ -659,6 +659,8 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
       }
       
       rows.push({
+        examId: examId || undefined,
+        eventId: eventId || undefined,
         degree: sheetDegree,
         kompetenzfeld: kompetenzfeld || (sheetDegree === 'MA' ? 'Master' : ''),
         studentName,

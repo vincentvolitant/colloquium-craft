@@ -1093,6 +1093,33 @@ export function generateSchedule(
       });
     }
   }
+
+  // Warn if external examiners are spread across multiple days
+  const externalDaySpread = new Map<string, Set<string>>(); // staffId -> Set of days
+  for (const event of events) {
+    const exam = exams.find(e => e.id === event.examId);
+    if (!exam) continue;
+    for (const examinerId of [exam.examiner1Id, exam.examiner2Id]) {
+      const examiner = staff.find(s => s.id === examinerId);
+      if (examiner?.employmentType === 'external') {
+        if (!externalDaySpread.has(examinerId)) externalDaySpread.set(examinerId, new Set());
+        externalDaySpread.get(examinerId)!.add(event.dayDate);
+      }
+    }
+  }
+  for (const [staffId, days] of externalDaySpread) {
+    if (days.size > 1) {
+      const examiner = staff.find(s => s.id === staffId);
+      conflicts.push({
+        type: 'constraint',
+        severity: 'warning',
+        message: `⚠️ Externe/r ${examiner?.name || staffId} ist über ${days.size} Tage verteilt (${Array.from(days).join(', ')})`,
+        affectedStaffId: staffId,
+        affectedStaffName: examiner?.name,
+        suggestion: 'Versuchen Sie, die Prüfungen auf einen Tag zu bündeln (ggf. Verfügbarkeit einschränken)',
+      });
+    }
+  }
   
   return { events, conflicts };
 }
