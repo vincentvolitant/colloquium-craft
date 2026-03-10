@@ -122,27 +122,81 @@ export function ScheduleImportWizard() {
     const newExams: Exam[] = [];
     const newEvents: ScheduledEvent[] = [];
     
-    // Keep track of existing exams by student name to avoid duplicates
+    // Build lookup maps for ID-based matching
+    const existingExamsById = new Map(exams.map(e => [e.id, e]));
     const existingExamsByStudent = new Map(exams.map(e => [e.studentName.toLowerCase(), e]));
+    // Fallback: match by student+degree+topic
+    const existingExamsByComposite = new Map(
+      exams.map(e => [`${e.studentName.toLowerCase()}|${e.degree}|${e.topic.toLowerCase().substring(0, 50)}`, e])
+    );
     const updatedExistingExams: Exam[] = [];
+    const matchedExamIds = new Set<string>();
+    const unmatchedRows: number[] = [];
     
-    for (const row of importRows) {
+    for (let idx = 0; idx < importRows.length; idx++) {
+      const row = importRows[idx];
       const studentKey = row.studentName.toLowerCase();
       
-      // Check if exam already exists
-      let exam = existingExamsByStudent.get(studentKey);
+      // Try to find existing exam: 1) by ID, 2) by composite key, 3) by student name
+      let exam: Exam | undefined;
+      let matchMethod = '';
+      
+      if (row.examId && existingExamsById.has(row.examId)) {
+        exam = existingExamsById.get(row.examId);
+        matchMethod = 'ID';
+      }
+      
+      if (!exam) {
+        const compositeKey = `${studentKey}|${row.degree}|${row.topic.toLowerCase().substring(0, 50)}`;
+        exam = existingExamsByComposite.get(compositeKey);
+        if (exam) matchMethod = 'Composite';
+      }
+      
+      if (!exam) {
+        exam = existingExamsByStudent.get(studentKey);
+        if (exam) matchMethod = 'Name';
+      }
       
       if (exam) {
-        // Update existing exam's isPublic if explicitly set in import
-        if (row.isPublicExplicit && exam.isPublic !== row.isPublic) {
-          exam = { ...exam, isPublic: row.isPublic };
-          updatedExistingExams.push(exam);
-          existingExamsByStudent.set(studentKey, exam);
+        // Check for ID mismatch (row has ID but it doesn't match found exam)
+        if (row.examId && row.examId !== exam.id && matchMethod !== 'ID') {
+          setWarnings(prev => [...prev, `Zeile ${idx + 2}: ID "${row.examId}" stimmt nicht mit gefundenem Exam überein (matched by ${matchMethod}). Verwende existierendes Exam.`]);
         }
-      } else {
+        
+        if (matchedExamIds.has(exam.id)) {
+          // This exam was already matched by another row — potential duplicate!
+          setWarnings(prev => [...prev, `Zeile ${idx + 2}: "${row.studentName}" wurde bereits von einer anderen Zeile zugeordnet. Erstelle neue Prüfung.`]);
+          exam = undefined; // Force new exam creation
+        } else {
+          matchedExamIds.add(exam.id);
+          
+          // Update existing exam if needed
+          if (row.isPublicExplicit && exam.isPublic !== row.isPublic) {
+            exam = { ...exam, isPublic: row.isPublic };
+            updatedExistingExams.push(exam);
+            existingExamsById.set(exam.id, exam);
+          }
+          // Update topic if changed
+          if (row.topic && row.topic !== exam.topic) {
+            exam = { ...exam, topic: row.topic };
+            if (!updatedExistingExams.some(e => e.id === exam!.id)) {
+              updatedExistingExams.push(exam);
+            } else {
+              const idx = updatedExistingExams.findIndex(e => e.id === exam!.id);
+              if (idx >= 0) updatedExistingExams[idx] = exam;
+            }
+            existingExamsById.set(exam.id, exam);
+          }
+        }
+      }
+      
+      if (!exam) {
         // Create new exam
+        if (!row.examId) {
+          unmatchedRows.push(idx + 2);
+        }
         exam = {
-          id: crypto.randomUUID(),
+          id: row.examId || crypto.randomUUID(),
           degree: row.degree as Degree,
           kompetenzfeld: row.kompetenzfeld === 'Master' ? null : row.kompetenzfeld,
           studentName: row.studentName,
@@ -152,12 +206,13 @@ export function ScheduleImportWizard() {
           isPublic: row.isPublic,
         };
         newExams.push(exam);
+        existingExamsById.set(exam.id, exam);
         existingExamsByStudent.set(studentKey, exam);
       }
       
       // Create scheduled event
       const event: ScheduledEvent = {
-        id: crypto.randomUUID(),
+        id: row.eventId || crypto.randomUUID(),
         scheduleVersionId: versionId,
         examId: exam.id,
         dayDate: row.dayDate,
@@ -172,15 +227,21 @@ export function ScheduleImportWizard() {
       newEvents.push(event);
     }
     
+    if (unmatchedRows.length > 0) {
+      toast({
+        title: 'Neue Prüfungen erstellt',
+        description: `${unmatchedRows.length} Zeile(n) konnten keiner bestehenden Prüfung zugeordnet werden und wurden neu erstellt.`,
+      });
+    }
+    
     // Merge with existing exams (keep existing unless updated, add new)
     const mergedExams = exams.map(existingExam => {
-      // Check if this exam was updated
       const updated = updatedExistingExams.find(u => u.id === existingExam.id);
       return updated || existingExam;
     });
-    // Add new exams
+    // Add new exams — but check for duplicates by ID
     for (const newExam of newExams) {
-      if (!mergedExams.some(e => e.studentName.toLowerCase() === newExam.studentName.toLowerCase())) {
+      if (!mergedExams.some(e => e.id === newExam.id)) {
         mergedExams.push(newExam);
       }
     }

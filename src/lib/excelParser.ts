@@ -387,7 +387,7 @@ export function parseStaff(
 export function exportScheduleToXLSX(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
+    event: { id?: string; dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
@@ -402,6 +402,8 @@ export function exportScheduleToXLSX(
       const examiners = e.allExaminers || [e.examiner1, e.examiner2];
       
       return {
+        'Exam-ID': e.exam.id,
+        'Event-ID': e.event.id || '',
         'Kompetenzfeld': e.exam.kompetenzfeld || '',
         'Name': displayNames.join(' & '),
         'Thema': e.exam.topic,
@@ -429,6 +431,8 @@ export function exportScheduleToXLSX(
       const examiners = e.allExaminers || [e.examiner1, e.examiner2];
       
       return {
+        'Exam-ID': e.exam.id,
+        'Event-ID': e.event.id || '',
         'Kompetenzfeld': 'Master',
         'Name': displayNames.join(' & '),
         'Thema': e.exam.topic,
@@ -515,6 +519,8 @@ export function exportScheduleToCSV(
 
 // Schedule import types
 export interface ScheduleImportRow {
+  examId?: string; // Stable ID from export for matching
+  eventId?: string; // Stable event ID from export for matching
   degree: string;
   kompetenzfeld: string;
   studentName: string;
@@ -562,6 +568,10 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
         }
         return '';
       };
+      
+      // Extract stable IDs if present (from system export)
+      const examId = getValue(['exam-id', 'exam_id', 'examid']);
+      const eventId = getValue(['event-id', 'event_id', 'eventid']);
       
       const studentName = getValue(['name', 'student', 'kandidat']);
       if (!studentName) {
@@ -649,6 +659,8 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
       }
       
       rows.push({
+        examId: examId || undefined,
+        eventId: eventId || undefined,
         degree: sheetDegree,
         kompetenzfeld: kompetenzfeld || (sheetDegree === 'MA' ? 'Master' : ''),
         studentName,

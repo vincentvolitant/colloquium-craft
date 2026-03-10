@@ -697,9 +697,21 @@ export function generateSchedule(
   }
   
   // Sort exams: MA first (to prioritize on early days), then by examiner load (highest first), then by kompetenzfeld
+  // NEW: External examiners get extra priority to enable compact scheduling
   const sortedExams = [...exams].sort((a, b) => {
     // MA before BA - Master exams get priority for early days
     if (a.degree !== b.degree) return a.degree === 'MA' ? -1 : 1;
+    
+    // Exams with external examiners get higher priority (schedule them first for compactness)
+    const aHasExternal = [a.examiner1Id, a.examiner2Id].some(id => {
+      const s = staff.find(st => st.id === id);
+      return s?.employmentType === 'external';
+    });
+    const bHasExternal = [b.examiner1Id, b.examiner2Id].some(id => {
+      const s = staff.find(st => st.id === id);
+      return s?.employmentType === 'external';
+    });
+    if (aHasExternal !== bHasExternal) return aHasExternal ? -1 : 1;
     
     // Within same degree: sort by combined examiner load (higher load = schedule first)
     const loadA = (examinerLoadMap.get(a.examiner1Id) || 0) + (examinerLoadMap.get(a.examiner2Id) || 0);
@@ -723,6 +735,9 @@ export function generateSchedule(
     const examiner1 = staff.find(s => s.id === exam.examiner1Id);
     const examiner2 = staff.find(s => s.id === exam.examiner2Id);
     
+    // Check if any examiner is external
+    const hasExternalExaminer = [examiner1, examiner2].some(e => e?.employmentType === 'external');
+    
     let scheduled = false;
     const triedDays: string[] = [];
     const dayFailureReasons: Map<string, string> = new Map();
@@ -738,6 +753,7 @@ export function generateSchedule(
     const examiner2Assignment = assignments.get(exam.examiner2Id);
     
     // Sort days: prefer days where examiners are already present, then prefer early days
+    // NEW: For external examiners, strongly prefer days where they already have assignments
     const sortedDays = [...config.days].sort((a, b) => {
       const indexA = config.days.indexOf(a);
       const indexB = config.days.indexOf(b);
@@ -748,8 +764,21 @@ export function generateSchedule(
       const examiner2HasA = examiner2Assignment?.dayAssignments.has(a) ? 1 : 0;
       const examiner2HasB = examiner2Assignment?.dayAssignments.has(b) ? 1 : 0;
       
-      const presenceA = examiner1HasA + examiner2HasA; // 0, 1 oder 2
-      const presenceB = examiner1HasB + examiner2HasB;
+      let presenceA = examiner1HasA + examiner2HasA; // 0, 1 oder 2
+      let presenceB = examiner1HasB + examiner2HasB;
+      
+      // For external examiners: triple the presence weight to strongly prefer existing days
+      if (hasExternalExaminer) {
+        // Check which examiners are external and weight their presence more
+        if (examiner1?.employmentType === 'external') {
+          presenceA += examiner1HasA * 3;
+          presenceB += examiner1HasB * 3;
+        }
+        if (examiner2?.employmentType === 'external') {
+          presenceA += examiner2HasA * 3;
+          presenceB += examiner2HasB * 3;
+        }
+      }
       
       // Höhere Präsenz = besser (kommt zuerst)
       if (presenceA !== presenceB) return presenceB - presenceA;
@@ -1061,6 +1090,33 @@ export function generateSchedule(
         severity: 'warning',
         message: `Protokoll-Arbeitslast unausgeglichen: ${minCount} bis ${maxCount} Zuweisungen pro Person`,
         suggestion: 'Passen Sie die Verfügbarkeit an oder fügen Sie mehr Protokollanten hinzu',
+      });
+    }
+  }
+
+  // Warn if external examiners are spread across multiple days
+  const externalDaySpread = new Map<string, Set<string>>(); // staffId -> Set of days
+  for (const event of events) {
+    const exam = exams.find(e => e.id === event.examId);
+    if (!exam) continue;
+    for (const examinerId of [exam.examiner1Id, exam.examiner2Id]) {
+      const examiner = staff.find(s => s.id === examinerId);
+      if (examiner?.employmentType === 'external') {
+        if (!externalDaySpread.has(examinerId)) externalDaySpread.set(examinerId, new Set());
+        externalDaySpread.get(examinerId)!.add(event.dayDate);
+      }
+    }
+  }
+  for (const [staffId, days] of externalDaySpread) {
+    if (days.size > 1) {
+      const examiner = staff.find(s => s.id === staffId);
+      conflicts.push({
+        type: 'constraint',
+        severity: 'warning',
+        message: `⚠️ Externe/r ${examiner?.name || staffId} ist über ${days.size} Tage verteilt (${Array.from(days).join(', ')})`,
+        affectedStaffId: staffId,
+        affectedStaffName: examiner?.name,
+        suggestion: 'Versuchen Sie, die Prüfungen auf einen Tag zu bündeln (ggf. Verfügbarkeit einschränken)',
       });
     }
   }
