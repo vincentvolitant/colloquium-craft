@@ -200,6 +200,15 @@ export default function AdminPage() {
               <AdminScheduleManager />
             </TabsContent>
             
+            {/* Table Editor */}
+            <TabsContent value="table">
+              <h2 className="text-lg font-semibold mb-4">Tabellen-Editor</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Bearbeiten Sie alle Termine direkt in der Tabelle. Änderungen werden sofort gespeichert.
+              </p>
+              <AdminTableEditor />
+            </TabsContent>
+            
             {/* Step 7: Export */}
             <TabsContent value="export">
               <h2 className="text-lg font-semibold mb-4">Schritt 7: Export & Veröffentlichung</h2>
