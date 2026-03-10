@@ -8,11 +8,12 @@ import { ScheduleConfigPanel } from '@/components/admin/ScheduleConfigPanel';
 import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPanel';
 import { ExportPanel } from '@/components/admin/ExportPanel';
 import { AdminScheduleManager } from '@/components/admin/AdminScheduleManager';
+import { AdminTableEditor } from '@/components/admin/AdminTableEditor';
 import { ScheduleImportWizard } from '@/components/admin/ScheduleImportWizard';
 import { AdminStatusDashboard } from '@/components/admin/AdminStatusDashboard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Home, LogOut, Users, GraduationCap, Calendar, Settings, Play, Download, ListChecks, FileUp } from 'lucide-react';
+import { Home, LogOut, Users, GraduationCap, Calendar, Settings, Play, Download, ListChecks, FileUp, Table2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
