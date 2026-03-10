@@ -186,7 +186,7 @@ export function PublicScheduleView() {
     selectedDegree !== 'all',
     selectedKompetenzfeld !== 'all',
     selectedRoom !== 'all',
-    selectedExaminer !== 'all',
+    selectedExaminers.length > 0,
     selectedPublic !== 'all',
     selectedStatus !== 'all',
     search !== '',
