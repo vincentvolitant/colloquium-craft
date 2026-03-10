@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Search, X } from 'lucide-react';
 import type { Degree } from '@/types';
-import { KOMPETENZFELD_MASTER_LABEL } from '@/types';
 
 interface ScheduleFiltersProps {
   search: string;
@@ -96,7 +95,6 @@ export function ScheduleFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Alle</SelectItem>
-              <SelectItem value={KOMPETENZFELD_MASTER_LABEL}>{KOMPETENZFELD_MASTER_LABEL}</SelectItem>
               {kompetenzfelder.map((kf) => (
                 <SelectItem key={kf} value={kf}>{kf}</SelectItem>
               ))}

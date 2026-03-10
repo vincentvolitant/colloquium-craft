@@ -14,6 +14,7 @@ import {
   saveScheduledEvents,
   upsertScheduledEvent,
   deleteScheduledEvents,
+  upsertExam,
 } from '@/lib/supabaseSync';
 import type {
   Exam,
@@ -70,6 +71,7 @@ interface ScheduleState {
   updateScheduledEvent: (event: ScheduledEvent) => void;
   removeScheduledEvents: (eventIds: string[]) => void;
   cancelEvent: (eventId: string, reason?: string) => void;
+  updateExam: (exam: Exam) => void;
   setConfig: (config: Partial<ScheduleConfig>) => void;
   setConflicts: (conflicts: ConflictReport[]) => void;
   createScheduleVersion: () => string;
@@ -242,6 +244,11 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     const updated = get().scheduledEvents.filter((e) => !eventIds.includes(e.id));
     set({ scheduledEvents: updated });
     deleteScheduledEvents(eventIds);
+  },
+  updateExam: (exam) => {
+    const updated = get().exams.map((e) => (e.id === exam.id ? exam : e));
+    set({ exams: updated });
+    upsertExam(exam);
   },
   cancelEvent: (eventId, reason) => {
     const updated = get().scheduledEvents.map((e) =>

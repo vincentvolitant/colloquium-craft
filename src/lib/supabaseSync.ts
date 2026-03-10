@@ -388,3 +388,8 @@ export async function deleteScheduledEvents(eventIds: string[]) {
   const { error } = await supabase.from('scheduled_events').delete().in('id', eventIds);
   if (error) console.error('Error deleting events:', error);
 }
+
+export async function upsertExam(exam: Exam) {
+  const { error } = await supabase.from('exams').upsert(mapExamToDb(exam));
+  if (error) console.error('Error upserting exam:', error);
+}
