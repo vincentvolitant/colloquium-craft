@@ -247,8 +247,8 @@ export function PublicScheduleView() {
               onKompetenzfeldChange={setSelectedKompetenzfeld}
               selectedRoom={selectedRoom}
               onRoomChange={setSelectedRoom}
-              selectedExaminer={selectedExaminer}
-              onExaminerChange={setSelectedExaminer}
+              selectedExaminers={selectedExaminers}
+              onExaminersChange={setSelectedExaminers}
               selectedPublic={selectedPublic}
               onPublicChange={setSelectedPublic}
               selectedStatus={selectedStatus}
