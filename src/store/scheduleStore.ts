@@ -71,6 +71,7 @@ interface ScheduleState {
   updateScheduledEvent: (event: ScheduledEvent) => void;
   removeScheduledEvents: (eventIds: string[]) => void;
   cancelEvent: (eventId: string, reason?: string) => void;
+  updateExam: (exam: Exam) => void;
   setConfig: (config: Partial<ScheduleConfig>) => void;
   setConflicts: (conflicts: ConflictReport[]) => void;
   createScheduleVersion: () => string;
