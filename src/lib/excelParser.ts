@@ -387,7 +387,7 @@ export function parseStaff(
 export function exportScheduleToXLSX(
   events: Array<{
     exam: Exam;
-    event: { dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
+    event: { id?: string; dayDate: string; room: string; startTime: string; endTime: string; status: string; cancelledReason?: string; durationMinutes?: number };
     protocolist: StaffMember | undefined;
     examiner1: StaffMember | undefined;
     examiner2: StaffMember | undefined;
@@ -402,6 +402,8 @@ export function exportScheduleToXLSX(
       const examiners = e.allExaminers || [e.examiner1, e.examiner2];
       
       return {
+        'Exam-ID': e.exam.id,
+        'Event-ID': e.event.id || '',
         'Kompetenzfeld': e.exam.kompetenzfeld || '',
         'Name': displayNames.join(' & '),
         'Thema': e.exam.topic,
@@ -429,6 +431,8 @@ export function exportScheduleToXLSX(
       const examiners = e.allExaminers || [e.examiner1, e.examiner2];
       
       return {
+        'Exam-ID': e.exam.id,
+        'Event-ID': e.event.id || '',
         'Kompetenzfeld': 'Master',
         'Name': displayNames.join(' & '),
         'Thema': e.exam.topic,
