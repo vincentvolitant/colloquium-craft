@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Search, X, ChevronsUpDown } from 'lucide-react';
 import type { Degree } from '@/types';
 
 interface ScheduleFiltersProps {
@@ -15,8 +19,8 @@ interface ScheduleFiltersProps {
   onKompetenzfeldChange: (value: string) => void;
   selectedRoom: string;
   onRoomChange: (value: string) => void;
-  selectedExaminer: string;
-  onExaminerChange: (value: string) => void;
+  selectedExaminers: string[];
+  onExaminersChange: (value: string[]) => void;
   selectedPublic: 'all' | 'public' | 'private';
   onPublicChange: (value: 'all' | 'public' | 'private') => void;
   selectedStatus: 'all' | 'scheduled' | 'cancelled';
@@ -37,8 +41,8 @@ export function ScheduleFilters({
   onKompetenzfeldChange,
   selectedRoom,
   onRoomChange,
-  selectedExaminer,
-  onExaminerChange,
+  selectedExaminers,
+  onExaminersChange,
   selectedPublic,
   onPublicChange,
   selectedStatus,
@@ -49,6 +53,27 @@ export function ScheduleFilters({
   onClearFilters,
   activeFilterCount,
 }: ScheduleFiltersProps) {
+  const [examinerSearch, setExaminerSearch] = useState('');
+  const [examinerPopoverOpen, setExaminerPopoverOpen] = useState(false);
+
+  const filteredExaminers = examiners.filter(e =>
+    e.name.toLowerCase().includes(examinerSearch.toLowerCase())
+  );
+
+  const toggleExaminer = (id: string) => {
+    if (selectedExaminers.includes(id)) {
+      onExaminersChange(selectedExaminers.filter(eid => eid !== id));
+    } else {
+      onExaminersChange([...selectedExaminers, id]);
+    }
+  };
+
+  const examinerLabel = selectedExaminers.length === 0
+    ? 'Alle'
+    : selectedExaminers.length === 1
+      ? examiners.find(e => e.id === selectedExaminers[0])?.name || '1 ausgewählt'
+      : `${selectedExaminers.length} ausgewählt`;
+
   return (
     <div className="space-y-4 p-4 border-2 bg-card">
       <div className="flex items-center justify-between">
@@ -119,17 +144,55 @@ export function ScheduleFilters({
         
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Prüfer/Protokoll</Label>
-          <Select value={selectedExaminer} onValueChange={onExaminerChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Alle" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle</SelectItem>
-              {examiners.map((e) => (
-                <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={examinerPopoverOpen} onOpenChange={setExaminerPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                className="w-full justify-between font-normal h-10 px-3"
+              >
+                <span className="truncate text-sm">{examinerLabel}</span>
+                <ChevronsUpDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="start">
+              <div className="p-2 border-b">
+                <Input
+                  placeholder="Suche..."
+                  value={examinerSearch}
+                  onChange={(e) => setExaminerSearch(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <ScrollArea className="max-h-52">
+                <div className="p-1">
+                  {selectedExaminers.length > 0 && (
+                    <button
+                      className="w-full text-left text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 mb-1"
+                      onClick={() => onExaminersChange([])}
+                    >
+                      Alle abwählen
+                    </button>
+                  )}
+                  {filteredExaminers.map((e) => (
+                    <label
+                      key={e.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={selectedExaminers.includes(e.id)}
+                        onCheckedChange={() => toggleExaminer(e.id)}
+                      />
+                      {e.name}
+                    </label>
+                  ))}
+                  {filteredExaminers.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-2">Keine Ergebnisse</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
         </div>
         
         <div className="space-y-1.5">

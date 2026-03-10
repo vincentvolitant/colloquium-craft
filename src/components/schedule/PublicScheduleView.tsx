@@ -33,7 +33,7 @@ export function PublicScheduleView() {
   const [selectedDegree, setSelectedDegree] = useState<Degree | 'all'>('all');
   const [selectedKompetenzfeld, setSelectedKompetenzfeld] = useState('all');
   const [selectedRoom, setSelectedRoom] = useState('all');
-  const [selectedExaminer, setSelectedExaminer] = useState('all');
+  const [selectedExaminers, setSelectedExaminers] = useState<string[]>([]);
   const [selectedPublic, setSelectedPublic] = useState<'all' | 'public' | 'private'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'scheduled' | 'cancelled'>('all');
   
@@ -108,12 +108,13 @@ export function PublicScheduleView() {
       // Room filter
       if (selectedRoom !== 'all' && event.room !== selectedRoom) return false;
       
-      // Examiner/Protocolist filter
-      if (selectedExaminer !== 'all') {
-        const matches = 
-          exam.examiner1Id === selectedExaminer ||
-          exam.examiner2Id === selectedExaminer ||
-          event.protocolistId === selectedExaminer;
+      // Examiner/Protocolist filter (multi-select)
+      if (selectedExaminers.length > 0) {
+        const matches = selectedExaminers.some(id =>
+          exam.examiner1Id === id ||
+          exam.examiner2Id === id ||
+          event.protocolistId === id
+        );
         if (!matches) return false;
       }
       
@@ -128,7 +129,7 @@ export function PublicScheduleView() {
       
       return true;
     });
-  }, [events, exams, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminer, selectedPublic, selectedStatus]);
+  }, [events, exams, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminers, selectedPublic, selectedStatus]);
   
   // Group filtered events by day, then by room
   const eventsByDayAndRoom = useMemo(() => {
@@ -185,7 +186,7 @@ export function PublicScheduleView() {
     selectedDegree !== 'all',
     selectedKompetenzfeld !== 'all',
     selectedRoom !== 'all',
-    selectedExaminer !== 'all',
+    selectedExaminers.length > 0,
     selectedPublic !== 'all',
     selectedStatus !== 'all',
     search !== '',
@@ -196,7 +197,7 @@ export function PublicScheduleView() {
     setSelectedDegree('all');
     setSelectedKompetenzfeld('all');
     setSelectedRoom('all');
-    setSelectedExaminer('all');
+    setSelectedExaminers([]);
     setSelectedPublic('all');
     setSelectedStatus('all');
   };
@@ -246,8 +247,8 @@ export function PublicScheduleView() {
               onKompetenzfeldChange={setSelectedKompetenzfeld}
               selectedRoom={selectedRoom}
               onRoomChange={setSelectedRoom}
-              selectedExaminer={selectedExaminer}
-              onExaminerChange={setSelectedExaminer}
+              selectedExaminers={selectedExaminers}
+              onExaminersChange={setSelectedExaminers}
               selectedPublic={selectedPublic}
               onPublicChange={setSelectedPublic}
               selectedStatus={selectedStatus}
