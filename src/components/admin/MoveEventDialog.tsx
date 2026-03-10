@@ -283,7 +283,7 @@ export function MoveEventDialog({ event, open, onOpenChange, onConfirm }: MoveEv
                         {formatDate(day)}
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {daySlots.slice(0, 15).map((slot) => (
+                        {(expandedDays.has(day) ? daySlots : daySlots.slice(0, 15)).map((slot) => (
                           <button
                             key={`${slot.dayDate}-${slot.room}-${slot.startTime}`}
                             onClick={() => setSelectedSlot(slot)}
@@ -305,10 +305,21 @@ export function MoveEventDialog({ event, open, onOpenChange, onConfirm }: MoveEv
                             </div>
                           </button>
                         ))}
-                        {daySlots.length > 15 && (
-                          <div className="p-2 text-xs text-muted-foreground flex items-center justify-center">
-                            +{daySlots.length - 15} weitere...
-                          </div>
+                        {daySlots.length > 15 && !expandedDays.has(day) && (
+                          <button
+                            onClick={() => setExpandedDays(prev => new Set([...prev, day]))}
+                            className="p-2 text-xs text-primary hover:bg-muted/50 border border-dashed rounded-lg flex items-center justify-center col-span-full"
+                          >
+                            +{daySlots.length - 15} weitere anzeigen
+                          </button>
+                        )}
+                        {daySlots.length > 15 && expandedDays.has(day) && (
+                          <button
+                            onClick={() => setExpandedDays(prev => { const n = new Set(prev); n.delete(day); return n; })}
+                            className="p-2 text-xs text-muted-foreground hover:bg-muted/50 border border-dashed rounded-lg flex items-center justify-center col-span-full"
+                          >
+                            Weniger anzeigen
+                          </button>
                         )}
                       </div>
                     </div>
