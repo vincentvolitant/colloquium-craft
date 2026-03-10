@@ -33,7 +33,7 @@ export function PublicScheduleView() {
   const [selectedDegree, setSelectedDegree] = useState<Degree | 'all'>('all');
   const [selectedKompetenzfeld, setSelectedKompetenzfeld] = useState('all');
   const [selectedRoom, setSelectedRoom] = useState('all');
-  const [selectedExaminer, setSelectedExaminer] = useState('all');
+  const [selectedExaminers, setSelectedExaminers] = useState<string[]>([]);
   const [selectedPublic, setSelectedPublic] = useState<'all' | 'public' | 'private'>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'scheduled' | 'cancelled'>('all');
   
