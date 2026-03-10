@@ -8,11 +8,12 @@ import { ScheduleConfigPanel } from '@/components/admin/ScheduleConfigPanel';
 import { ScheduleGeneratorPanel } from '@/components/admin/ScheduleGeneratorPanel';
 import { ExportPanel } from '@/components/admin/ExportPanel';
 import { AdminScheduleManager } from '@/components/admin/AdminScheduleManager';
+import { AdminTableEditor } from '@/components/admin/AdminTableEditor';
 import { ScheduleImportWizard } from '@/components/admin/ScheduleImportWizard';
 import { AdminStatusDashboard } from '@/components/admin/AdminStatusDashboard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Home, LogOut, Users, GraduationCap, Calendar, Settings, Play, Download, ListChecks, FileUp } from 'lucide-react';
+import { Home, LogOut, Users, GraduationCap, Calendar, Settings, Play, Download, ListChecks, FileUp, Table2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Exam, StaffMember } from '@/types';
 
@@ -122,6 +123,10 @@ export default function AdminPage() {
                 <ListChecks className="h-4 w-4" />
                 <span className="hidden sm:inline">Termine</span>
               </TabsTrigger>
+              <TabsTrigger value="table" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
+                <Table2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Tabelle</span>
+              </TabsTrigger>
               <TabsTrigger value="export" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-background">
                 <Download className="h-4 w-4" />
                 <span className="hidden sm:inline">Export</span>
@@ -193,6 +198,15 @@ export default function AdminPage() {
             <TabsContent value="manage">
               <h2 className="text-lg font-semibold mb-4">Schritt 6: Termine verwalten</h2>
               <AdminScheduleManager />
+            </TabsContent>
+            
+            {/* Table Editor */}
+            <TabsContent value="table">
+              <h2 className="text-lg font-semibold mb-4">Tabellen-Editor</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Bearbeiten Sie alle Termine direkt in der Tabelle. Änderungen werden sofort gespeichert.
+              </p>
+              <AdminTableEditor />
             </TabsContent>
             
             {/* Step 7: Export */}
