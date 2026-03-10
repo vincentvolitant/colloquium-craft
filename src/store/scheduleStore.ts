@@ -14,6 +14,7 @@ import {
   saveScheduledEvents,
   upsertScheduledEvent,
   deleteScheduledEvents,
+  upsertExam,
 } from '@/lib/supabaseSync';
 import type {
   Exam,
