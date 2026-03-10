@@ -108,12 +108,13 @@ export function PublicScheduleView() {
       // Room filter
       if (selectedRoom !== 'all' && event.room !== selectedRoom) return false;
       
-      // Examiner/Protocolist filter
-      if (selectedExaminer !== 'all') {
-        const matches = 
-          exam.examiner1Id === selectedExaminer ||
-          exam.examiner2Id === selectedExaminer ||
-          event.protocolistId === selectedExaminer;
+      // Examiner/Protocolist filter (multi-select)
+      if (selectedExaminers.length > 0) {
+        const matches = selectedExaminers.some(id =>
+          exam.examiner1Id === id ||
+          exam.examiner2Id === id ||
+          event.protocolistId === id
+        );
         if (!matches) return false;
       }
       
