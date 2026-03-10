@@ -41,6 +41,7 @@ export function MoveEventDialog({ event, open, onOpenChange, onConfirm }: MoveEv
   const [selectedDay, setSelectedDay] = useState<string>('all');
   const [selectedSlot, setSelectedSlot] = useState<MergeSlotOption | null>(null);
   const [activeTab, setActiveTab] = useState<string>('slots');
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   
   // Manual input state
   const [manualDate, setManualDate] = useState<Date | undefined>(undefined);
