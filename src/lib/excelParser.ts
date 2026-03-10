@@ -569,6 +569,10 @@ export function parseScheduleXLSX(sheets: ParsedSheet[], staff: StaffMember[]): 
         return '';
       };
       
+      // Extract stable IDs if present (from system export)
+      const examId = getValue(['exam-id', 'exam_id', 'examid']);
+      const eventId = getValue(['event-id', 'event_id', 'eventid']);
+      
       const studentName = getValue(['name', 'student', 'kandidat']);
       if (!studentName) {
         warnings.push(`Zeile ${rowNum} (${sheet.name}): Kein Studentenname gefunden, übersprungen`);
