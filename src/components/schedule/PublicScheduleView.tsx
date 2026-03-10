@@ -197,7 +197,7 @@ export function PublicScheduleView() {
     setSelectedDegree('all');
     setSelectedKompetenzfeld('all');
     setSelectedRoom('all');
-    setSelectedExaminer('all');
+    setSelectedExaminers([]);
     setSelectedPublic('all');
     setSelectedStatus('all');
   };
