@@ -184,6 +184,7 @@ export function MoveEventDialog({ event, open, onOpenChange, onConfirm }: MoveEv
     setSelectedSlot(null);
     setSelectedDay('all');
     setActiveTab('slots');
+    setExpandedDays(new Set());
     setManualDate(undefined);
     setManualStartTime('');
     setManualEndTime('');

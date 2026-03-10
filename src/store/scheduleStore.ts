@@ -245,6 +245,11 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     set({ scheduledEvents: updated });
     deleteScheduledEvents(eventIds);
   },
+  updateExam: (exam) => {
+    const updated = get().exams.map((e) => (e.id === exam.id ? exam : e));
+    set({ exams: updated });
+    upsertExam(exam);
+  },
   cancelEvent: (eventId, reason) => {
     const updated = get().scheduledEvents.map((e) =>
       e.id === eventId

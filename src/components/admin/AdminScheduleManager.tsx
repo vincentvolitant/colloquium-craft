@@ -3,14 +3,15 @@ import { useScheduleStore } from '@/store/scheduleStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-// ScrollArea removed - using plain div for better overflow handling
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Calendar, Clock, MapPin, User, Users, MoreVertical, XCircle, Check, CalendarDays, ArrowRight, RefreshCw } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Calendar, Clock, MapPin, User, Users, MoreVertical, XCircle, Check, CalendarDays, ArrowRight, RefreshCw, FileEdit, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +27,7 @@ export function AdminScheduleManager() {
     scheduleVersions, 
     getStaffById,
     updateScheduledEvent,
+    updateExam,
     cancelEvent,
   } = useScheduleStore();
   const { toast } = useToast();
@@ -42,6 +44,11 @@ export function AdminScheduleManager() {
   // Move event dialog
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [eventToMove, setEventToMove] = useState<ScheduledEvent | null>(null);
+  
+  // Topic edit dialog
+  const [topicDialogOpen, setTopicDialogOpen] = useState(false);
+  const [topicEditExamId, setTopicEditExamId] = useState<string | null>(null);
+  const [topicEditValue, setTopicEditValue] = useState('');
   
   // Get active/published version
   const activeVersion = scheduleVersions.find(v => v.status === 'published') || scheduleVersions[scheduleVersions.length - 1];
@@ -72,7 +79,6 @@ export function AdminScheduleManager() {
       dayEvents.push(event);
       grouped.set(event.dayDate, dayEvents);
     }
-    // Sort each day's events by time
     for (const [day, events] of grouped) {
       grouped.set(day, events.sort((a, b) => a.startTime.localeCompare(b.startTime)));
     }
@@ -156,6 +162,43 @@ export function AdminScheduleManager() {
     }
   };
   
+  const handleEditTopic = (examId: string) => {
+    const exam = exams.find(e => e.id === examId);
+    if (exam) {
+      setTopicEditExamId(examId);
+      setTopicEditValue(exam.topic);
+      setTopicDialogOpen(true);
+    }
+  };
+  
+  const handleTopicSave = () => {
+    if (topicEditExamId) {
+      const exam = exams.find(e => e.id === topicEditExamId);
+      if (exam) {
+        updateExam({ ...exam, topic: topicEditValue });
+        toast({
+          title: 'Thema aktualisiert',
+          description: 'Das Prüfungsthema wurde geändert.',
+        });
+      }
+      setTopicDialogOpen(false);
+      setTopicEditExamId(null);
+    }
+  };
+  
+  const handleTogglePublic = (examId: string) => {
+    const exam = exams.find(e => e.id === examId);
+    if (exam) {
+      updateExam({ ...exam, isPublic: !exam.isPublic });
+      toast({
+        title: exam.isPublic ? 'Nicht öffentlich' : 'Öffentlich',
+        description: exam.isPublic 
+          ? 'Die Prüfung ist jetzt nicht öffentlich.' 
+          : 'Die Prüfung ist jetzt öffentlich.',
+      });
+    }
+  };
+  
   if (!activeVersion) {
     return (
       <Card>
@@ -234,7 +277,6 @@ export function AdminScheduleManager() {
                   return (
                     <Card key={event.id} className={`w-full ${isCancelled ? 'opacity-60 border-destructive/30' : ''}`}>
                       <CardContent className="p-3">
-                        {/* Grid layout: Time/Room | Content | Actions */}
                         <div className="grid grid-cols-[7rem_minmax(0,1fr)_auto] gap-4 items-start">
                           {/* Time & Room */}
                           <div className="shrink-0 border-r border-border pr-6">
@@ -291,7 +333,7 @@ export function AdminScheduleManager() {
                             )}
                           </div>
                           
-                          {/* Actions dropdown - in grid, always visible */}
+                          {/* Actions dropdown */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 bg-background/80 hover:bg-accent">
@@ -299,6 +341,24 @@ export function AdminScheduleManager() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => exam && handleEditTopic(exam.id)}>
+                                <FileEdit className="h-4 w-4 mr-2" />
+                                Thema bearbeiten
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => exam && handleTogglePublic(exam.id)}>
+                                {exam?.isPublic === false ? (
+                                  <>
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Öffentlich machen
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff className="h-4 w-4 mr-2" />
+                                    Nicht öffentlich machen
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => handleChangeProtocolist(event)}>
                                 <Users className="h-4 w-4 mr-2" />
                                 Protokollant ändern
@@ -365,6 +425,41 @@ export function AdminScheduleManager() {
         </AlertDialogContent>
       </AlertDialog>
       
+      {/* Topic Edit Dialog */}
+      <Dialog open={topicDialogOpen} onOpenChange={setTopicDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="h-5 w-5" />
+              Thema bearbeiten
+            </DialogTitle>
+            <DialogDescription>
+              Ändern Sie das Prüfungsthema direkt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="topicEdit" className="text-sm font-medium">
+              Prüfungsthema
+            </Label>
+            <Textarea
+              id="topicEdit"
+              value={topicEditValue}
+              onChange={(e) => setTopicEditValue(e.target.value)}
+              className="mt-2 min-h-[100px]"
+              placeholder="Thema eingeben..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTopicDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleTopicSave} disabled={!topicEditValue.trim()}>
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       {/* Protocolist Change Dialog */}
       <ChangeProtocolistDialog
         event={eventForProtocolist}
@@ -380,8 +475,6 @@ export function AdminScheduleManager() {
         onOpenChange={setMoveDialogOpen}
         onConfirm={handleMoveConfirm}
       />
-      
-      {/* Merge Colloquia Dialog - it manages its own open state via trigger */}
     </div>
   );
 }
