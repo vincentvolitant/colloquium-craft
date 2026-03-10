@@ -129,7 +129,7 @@ export function PublicScheduleView() {
       
       return true;
     });
-  }, [events, exams, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminer, selectedPublic, selectedStatus]);
+  }, [events, exams, search, selectedDegree, selectedKompetenzfeld, selectedRoom, selectedExaminers, selectedPublic, selectedStatus]);
   
   // Group filtered events by day, then by room
   const eventsByDayAndRoom = useMemo(() => {
