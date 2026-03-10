@@ -96,7 +96,6 @@ export function ScheduleFilters({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Alle</SelectItem>
-              <SelectItem value={KOMPETENZFELD_MASTER_LABEL}>{KOMPETENZFELD_MASTER_LABEL}</SelectItem>
               {kompetenzfelder.map((kf) => (
                 <SelectItem key={kf} value={kf}>{kf}</SelectItem>
               ))}
