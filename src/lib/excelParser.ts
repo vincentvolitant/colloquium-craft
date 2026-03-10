@@ -519,6 +519,8 @@ export function exportScheduleToCSV(
 
 // Schedule import types
 export interface ScheduleImportRow {
+  examId?: string; // Stable ID from export for matching
+  eventId?: string; // Stable event ID from export for matching
   degree: string;
   kompetenzfeld: string;
   studentName: string;
