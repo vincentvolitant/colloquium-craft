@@ -241,12 +241,3 @@ export function ExamCard({ exam, event, examiner1, examiner2, protocolist, allEx
     </Card>
   );
 }
-        {isCancelled && event.cancelledReason && (
-          <p className="mt-3 text-sm text-destructive italic">
-            Grund: {event.cancelledReason}
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
