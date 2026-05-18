@@ -191,7 +191,7 @@ export function ScheduleGeneratorPanel() {
     publishVersion(currentVersionId);
     toast({
       title: 'Plan veröffentlicht',
-      description: 'Der Kolloquiumsplan ist jetzt öffentlich einsehbar.',
+      description: 'Der Kolloquienplan ist jetzt öffentlich einsehbar.',
     });
   };
   
@@ -313,7 +313,7 @@ export function ScheduleGeneratorPanel() {
             Plan generieren
           </CardTitle>
           <CardDescription>
-            Erstellen Sie automatisch einen optimierten Kolloquiumsplan
+            Erstellen Sie automatisch einen optimierten Kolloquienplan
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

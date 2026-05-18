@@ -48,7 +48,7 @@ export function ExportPanel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Kolloquiumsplan_${new Date().toISOString().split('T')[0]}.xlsx`;
+    a.download = `Kolloquienplan_${new Date().toISOString().split('T')[0]}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -68,7 +68,7 @@ export function ExportPanel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Kolloquiumsplan_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `Kolloquienplan_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -90,7 +90,7 @@ export function ExportPanel() {
           Export
         </CardTitle>
         <CardDescription>
-          Exportieren Sie den veröffentlichten Kolloquiumsplan
+          Exportieren Sie den veröffentlichten Kolloquienplan
         </CardDescription>
       </CardHeader>
       <CardContent>
