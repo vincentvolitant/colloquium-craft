@@ -264,7 +264,7 @@ export function ScheduleImportWizard() {
       publishVersion(importedVersionId);
       toast({
         title: 'Veröffentlicht',
-      description: 'Die importierte Planversion ist jetzt öffentlich sichtbar.',
+        description: 'Die importierte Planversion ist jetzt öffentlich sichtbar.',
       });
     }
   };
