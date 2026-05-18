@@ -160,7 +160,7 @@ export function ScheduleImportWizard() {
       if (exam) {
         // Check for ID mismatch (row has ID but it doesn't match found exam)
         if (row.examId && row.examId !== exam.id && matchMethod !== 'ID') {
-          setWarnings(prev => [...prev, `Zeile ${idx + 2}: ID "${row.examId}" stimmt nicht mit gefundenem Exam überein (matched by ${matchMethod}). Verwende existierendes Exam.`]);
+          setWarnings(prev => [...prev, `Zeile ${idx + 2}: ID "${row.examId}" stimmt nicht mit gefundenem Termin überein (matched by ${matchMethod}). Verwende existierendes Exam.`]);
         }
         
         if (matchedExamIds.has(exam.id)) {
