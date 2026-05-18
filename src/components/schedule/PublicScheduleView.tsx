@@ -211,7 +211,7 @@ export function PublicScheduleView() {
         <div className="container py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Kolloquiumsplaner</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Kolloquienplaner</h1>
               <p className="text-muted-foreground mt-1">
                 Fakultät Gestaltung
               </p>
@@ -232,7 +232,7 @@ export function PublicScheduleView() {
             <FileSpreadsheet className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h2 className="text-2xl font-semibold mb-2">Noch kein Zeitplan veröffentlicht</h2>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Der Kolloquiumsplan wird hier angezeigt, sobald er vom Administrator erstellt und veröffentlicht wurde.
+              Der Kolloquienplan wird hier angezeigt, sobald er vom Administrator erstellt und veröffentlicht wurde.
             </p>
           </div>
         ) : (
@@ -375,7 +375,7 @@ export function PublicScheduleView() {
       {/* Footer */}
       <footer className="border-t-2 mt-12">
         <div className="container py-6 text-center text-sm text-muted-foreground">
-          <p>Kolloquiumsplaner • Gemacht mit Liebe im IxD Lab.</p>
+          <p>Kolloquienplaner • Gemacht mit Liebe im IxD Lab.</p>
         </div>
       </footer>
       
