@@ -1,5 +1,6 @@
 // Supabase sync utilities for schedule data
 import { supabase } from '@/integrations/supabase/client';
+import { getAdminPassword } from '@/lib/adminSession';
 import type {
   Exam,
   StaffMember,
@@ -10,6 +11,54 @@ import type {
   ScheduleVersion,
   AvailabilityOverride,
 } from '@/types';
+
+// ============ ADMIN WRITE PROXY ============
+// All writes go through the `admin-db` edge function, which validates the
+// admin password and performs the change using the service role. Anonymous
+// browsers can no longer write directly to the database.
+
+type AdminOp =
+  | { kind: 'upsert'; table: string; rows: Record<string, unknown>[] }
+  | {
+      kind: 'update';
+      table: string;
+      values: Record<string, unknown>;
+      match?: Record<string, unknown>;
+      eqStatus?: string;
+    }
+  | {
+      kind: 'delete';
+      table: string;
+      match?: Record<string, unknown>;
+      neqId?: string;
+      inIds?: string[];
+    };
+
+async function adminWrite(ops: AdminOp[]): Promise<void> {
+  const password = getAdminPassword();
+  if (!password) {
+    console.error('adminWrite called without an authenticated admin session');
+    throw new Error('Nicht als Admin angemeldet');
+  }
+  const { data, error } = await supabase.functions.invoke('admin-db', {
+    body: { password, ops },
+  });
+  if (error) {
+    console.error('admin-db invocation failed:', error);
+    throw error;
+  }
+  if (!data?.success) {
+    console.error('admin-db returned error:', data?.error);
+    throw new Error(data?.error || 'Speichern fehlgeschlagen');
+  }
+}
+
+// Columns that the public/anon role is allowed to read on `exams`.
+// `student_email` is intentionally excluded.
+const PUBLIC_EXAM_COLUMNS =
+  'id, degree, kompetenzfeld, student_first_name, student_last_name, topic, examiner1_id, examiner2_id, is_team, team_partner_first_name, team_partner_last_name, is_public, created_at, updated_at';
+
+
 
 // ============ TYPE MAPPERS ============
 
