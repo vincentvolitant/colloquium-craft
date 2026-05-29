@@ -306,13 +306,14 @@ export async function loadAllFromSupabase() {
     { data: eventsData, error: eventsError },
   ] = await Promise.all([
     supabase.from('staff').select('*'),
-    supabase.from('exams').select('*'),
+    supabase.from('exams').select(PUBLIC_EXAM_COLUMNS),
     supabase.from('rooms').select('*'),
     supabase.from('room_mappings').select('*'),
     supabase.from('schedule_config').select('*').limit(1),
     supabase.from('schedule_versions').select('*').order('created_at', { ascending: true }),
     supabase.from('scheduled_events').select('*'),
   ]);
+
 
   if (staffError) console.error('Error loading staff:', staffError);
   if (examsError) console.error('Error loading exams:', examsError);
