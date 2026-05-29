@@ -485,6 +485,3 @@ export async function deleteScheduledEvents(eventIds: string[]) {
 export async function upsertExam(exam: Exam) {
   await adminWrite([{ kind: 'upsert', table: 'exams', rows: [mapExamToDb(exam)] }]);
 }
-
-  if (error) console.error('Error upserting exam:', error);
-}
