@@ -16,6 +16,8 @@ import {
   deleteScheduledEvents,
   upsertExam,
 } from '@/lib/supabaseSync';
+import { setAdminPassword, clearAdminPassword } from '@/lib/adminSession';
+
 import type {
   Exam,
   StaffMember,
@@ -310,6 +312,7 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       }
 
       if (data?.success) {
+        setAdminPassword(password);
         set({ isAdminAuthenticated: true });
         return true;
       }
@@ -319,7 +322,10 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       return false;
     }
   },
-  logoutAdmin: () => set({ isAdminAuthenticated: false }),
+  logoutAdmin: () => {
+    clearAdminPassword();
+    set({ isAdminAuthenticated: false });
+  },
 
   validateMerge: (examId1, examId2, protocolistId, targetSlot) => {
     const state = get();

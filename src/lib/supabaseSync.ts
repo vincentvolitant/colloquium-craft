@@ -1,5 +1,6 @@
 // Supabase sync utilities for schedule data
 import { supabase } from '@/integrations/supabase/client';
+import { getAdminPassword } from '@/lib/adminSession';
 import type {
   Exam,
   StaffMember,
@@ -10,6 +11,54 @@ import type {
   ScheduleVersion,
   AvailabilityOverride,
 } from '@/types';
+
+// ============ ADMIN WRITE PROXY ============
+// All writes go through the `admin-db` edge function, which validates the
+// admin password and performs the change using the service role. Anonymous
+// browsers can no longer write directly to the database.
+
+type AdminOp =
+  | { kind: 'upsert'; table: string; rows: Record<string, unknown>[] }
+  | {
+      kind: 'update';
+      table: string;
+      values: Record<string, unknown>;
+      match?: Record<string, unknown>;
+      eqStatus?: string;
+    }
+  | {
+      kind: 'delete';
+      table: string;
+      match?: Record<string, unknown>;
+      neqId?: string;
+      inIds?: string[];
+    };
+
+async function adminWrite(ops: AdminOp[]): Promise<void> {
+  const password = getAdminPassword();
+  if (!password) {
+    console.error('adminWrite called without an authenticated admin session');
+    throw new Error('Nicht als Admin angemeldet');
+  }
+  const { data, error } = await supabase.functions.invoke('admin-db', {
+    body: { password, ops },
+  });
+  if (error) {
+    console.error('admin-db invocation failed:', error);
+    throw error;
+  }
+  if (!data?.success) {
+    console.error('admin-db returned error:', data?.error);
+    throw new Error(data?.error || 'Speichern fehlgeschlagen');
+  }
+}
+
+// Columns that the public/anon role is allowed to read on `exams`.
+// `student_email` is intentionally excluded.
+const PUBLIC_EXAM_COLUMNS =
+  'id, degree, kompetenzfeld, student_first_name, student_last_name, topic, examiner1_id, examiner2_id, is_team, team_partner_first_name, team_partner_last_name, is_public, created_at, updated_at';
+
+
 
 // ============ TYPE MAPPERS ============
 
@@ -68,7 +117,7 @@ function mapDbExam(row: {
   kompetenzfeld: string;
   student_first_name: string;
   student_last_name: string;
-  student_email: string | null;
+  student_email?: string | null;
   topic: string;
   examiner1_id: string | null;
   examiner2_id: string | null;
@@ -77,6 +126,7 @@ function mapDbExam(row: {
   team_partner_last_name: string | null;
   is_public?: boolean;
 }): Exam {
+
   const studentName = [row.student_first_name, row.student_last_name].filter(Boolean).join(' ');
   const teamPartnerName = row.is_team && row.team_partner_first_name
     ? [row.team_partner_first_name, row.team_partner_last_name].filter(Boolean).join(' ')
@@ -257,13 +307,14 @@ export async function loadAllFromSupabase() {
     { data: eventsData, error: eventsError },
   ] = await Promise.all([
     supabase.from('staff').select('*'),
-    supabase.from('exams').select('*'),
+    supabase.from('exams').select(PUBLIC_EXAM_COLUMNS),
     supabase.from('rooms').select('*'),
     supabase.from('room_mappings').select('*'),
     supabase.from('schedule_config').select('*').limit(1),
     supabase.from('schedule_versions').select('*').order('created_at', { ascending: true }),
     supabase.from('scheduled_events').select('*'),
   ]);
+
 
   if (staffError) console.error('Error loading staff:', staffError);
   if (examsError) console.error('Error loading exams:', examsError);
@@ -297,99 +348,140 @@ export async function loadAllFromSupabase() {
   };
 }
 
-// ============ SAVE TO SUPABASE ============
+// ============ SAVE TO SUPABASE (via admin-db edge function) ============
+
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export async function saveStaff(staff: StaffMember[]) {
-  // First delete all existing staff, then insert new
-  await supabase.from('staff').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const ops: AdminOp[] = [
+    { kind: 'delete', table: 'staff', neqId: NIL_UUID },
+  ];
   if (staff.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from('staff').upsert(staff.map(mapStaffToDb) as any);
-    if (error) console.error('Error saving staff:', error);
+    ops.push({ kind: 'upsert', table: 'staff', rows: staff.map(mapStaffToDb) });
   }
+  await adminWrite(ops);
 }
 
 export async function updateStaffMember(staff: StaffMember) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await supabase.from('staff').upsert(mapStaffToDb(staff) as any);
-  if (error) console.error('Error updating staff member:', error);
+  await adminWrite([{ kind: 'upsert', table: 'staff', rows: [mapStaffToDb(staff)] }]);
 }
 
 export async function saveExams(exams: Exam[]) {
-  await supabase.from('exams').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const ops: AdminOp[] = [
+    { kind: 'delete', table: 'exams', neqId: NIL_UUID },
+  ];
   if (exams.length > 0) {
-    const { error } = await supabase.from('exams').upsert(exams.map(mapExamToDb));
-    if (error) console.error('Error saving exams:', error);
+    ops.push({ kind: 'upsert', table: 'exams', rows: exams.map(mapExamToDb) });
   }
+  await adminWrite(ops);
 }
 
 export async function saveRooms(rooms: Room[]) {
-  await supabase.from('rooms').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const ops: AdminOp[] = [
+    { kind: 'delete', table: 'rooms', neqId: NIL_UUID },
+  ];
   if (rooms.length > 0) {
-    const { error } = await supabase.from('rooms').upsert(rooms.map((r) => ({ id: r.id, name: r.name })));
-    if (error) console.error('Error saving rooms:', error);
+    ops.push({
+      kind: 'upsert',
+      table: 'rooms',
+      rows: rooms.map((r) => ({ id: r.id, name: r.name })),
+    });
   }
+  await adminWrite(ops);
 }
 
 export async function saveRoomMappings(mappings: RoomMapping[]) {
-  await supabase.from('room_mappings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const ops: AdminOp[] = [
+    { kind: 'delete', table: 'room_mappings', neqId: NIL_UUID },
+  ];
   if (mappings.length > 0) {
-    const { error } = await supabase.from('room_mappings').upsert(mappings.map(mapRoomMappingToDb));
-    if (error) console.error('Error saving room mappings:', error);
+    ops.push({
+      kind: 'upsert',
+      table: 'room_mappings',
+      rows: mappings.map(mapRoomMappingToDb),
+    });
   }
+  await adminWrite(ops);
 }
 
 export async function saveConfig(config: ScheduleConfig) {
-  // Upsert the single config row
+  // Read current id (public read is still allowed)
   const { data: existing } = await supabase.from('schedule_config').select('id').limit(1);
   const id = existing?.[0]?.id || crypto.randomUUID();
-
-  const { error } = await supabase.from('schedule_config').upsert({
-    id,
-    days: config.days,
-    start_time: config.startTime,
-    end_time: config.endTime,
-    ba_slot_minutes: config.baSlotMinutes,
-    ma_slot_minutes: config.maSlotMinutes,
-  });
-  if (error) console.error('Error saving config:', error);
+  await adminWrite([
+    {
+      kind: 'upsert',
+      table: 'schedule_config',
+      rows: [
+        {
+          id,
+          days: config.days,
+          start_time: config.startTime,
+          end_time: config.endTime,
+          ba_slot_minutes: config.baSlotMinutes,
+          ma_slot_minutes: config.maSlotMinutes,
+        },
+      ],
+    },
+  ]);
 }
 
 export async function saveVersion(version: ScheduleVersion) {
-  const { error } = await supabase.from('schedule_versions').upsert(mapVersionToDb(version));
-  if (error) console.error('Error saving version:', error);
+  await adminWrite([
+    { kind: 'upsert', table: 'schedule_versions', rows: [mapVersionToDb(version)] },
+  ]);
 }
 
 export async function updateVersionStatus(versionId: string, status: 'draft' | 'published') {
-  const { error } = await supabase.from('schedule_versions').update({ status }).eq('id', versionId);
-  if (error) console.error('Error updating version status:', error);
+  await adminWrite([
+    {
+      kind: 'update',
+      table: 'schedule_versions',
+      values: { status },
+      match: { id: versionId },
+    },
+  ]);
 }
 
 export async function unpublishAllVersions() {
-  const { error } = await supabase.from('schedule_versions').update({ status: 'draft' }).eq('status', 'published');
-  if (error) console.error('Error unpublishing versions:', error);
+  await adminWrite([
+    {
+      kind: 'update',
+      table: 'schedule_versions',
+      values: { status: 'draft' },
+      eqStatus: 'published',
+    },
+  ]);
 }
 
 export async function saveScheduledEvents(events: ScheduledEvent[]) {
-  await supabase.from('scheduled_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const ops: AdminOp[] = [
+    { kind: 'delete', table: 'scheduled_events', neqId: NIL_UUID },
+  ];
   if (events.length > 0) {
-    const { error } = await supabase.from('scheduled_events').upsert(events.map(mapEventToDb));
-    if (error) console.error('Error saving scheduled events:', error);
+    ops.push({
+      kind: 'upsert',
+      table: 'scheduled_events',
+      rows: events.map(mapEventToDb),
+    });
   }
+  await adminWrite(ops);
 }
 
 export async function upsertScheduledEvent(event: ScheduledEvent) {
-  const { error } = await supabase.from('scheduled_events').upsert(mapEventToDb(event));
-  if (error) console.error('Error upserting event:', error);
+  await adminWrite([
+    { kind: 'upsert', table: 'scheduled_events', rows: [mapEventToDb(event)] },
+  ]);
 }
 
 export async function deleteScheduledEvents(eventIds: string[]) {
   if (eventIds.length === 0) return;
-  const { error } = await supabase.from('scheduled_events').delete().in('id', eventIds);
-  if (error) console.error('Error deleting events:', error);
+  await adminWrite([
+    { kind: 'delete', table: 'scheduled_events', inIds: eventIds },
+  ]);
 }
 
 export async function upsertExam(exam: Exam) {
-  const { error } = await supabase.from('exams').upsert(mapExamToDb(exam));
-  if (error) console.error('Error upserting exam:', error);
+  await adminWrite([{ kind: 'upsert', table: 'exams', rows: [mapExamToDb(exam)] }]);
 }
