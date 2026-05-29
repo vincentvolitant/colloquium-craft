@@ -16,6 +16,8 @@ import {
   deleteScheduledEvents,
   upsertExam,
 } from '@/lib/supabaseSync';
+import { setAdminPassword, clearAdminPassword } from '@/lib/adminSession';
+
 import type {
   Exam,
   StaffMember,
