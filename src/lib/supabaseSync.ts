@@ -117,7 +117,7 @@ function mapDbExam(row: {
   kompetenzfeld: string;
   student_first_name: string;
   student_last_name: string;
-  student_email: string | null;
+  student_email?: string | null;
   topic: string;
   examiner1_id: string | null;
   examiner2_id: string | null;
@@ -126,6 +126,7 @@ function mapDbExam(row: {
   team_partner_last_name: string | null;
   is_public?: boolean;
 }): Exam {
+
   const studentName = [row.student_first_name, row.student_last_name].filter(Boolean).join(' ');
   const teamPartnerName = row.is_team && row.team_partner_first_name
     ? [row.team_partner_first_name, row.team_partner_last_name].filter(Boolean).join(' ')
