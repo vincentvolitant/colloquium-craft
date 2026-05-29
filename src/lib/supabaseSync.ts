@@ -346,7 +346,10 @@ export async function loadAllFromSupabase() {
     scheduleVersions: (versionsData || []).map((row) => mapDbVersion(row as Parameters<typeof mapDbVersion>[0])),
     scheduledEvents: (eventsData || []).map((row) => mapDbEvent(row as Parameters<typeof mapDbEvent>[0])),
   };
+}
+
 // ============ SAVE TO SUPABASE (via admin-db edge function) ============
+
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
