@@ -462,17 +462,7 @@ export async function unpublishAllVersions() {
 }
 
 export async function saveScheduledEvents(events: ScheduledEvent[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'scheduled_events', neqId: NIL_UUID },
-  ];
-  if (events.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'scheduled_events',
-      rows: events.map(mapEventToDb),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('scheduled_events', events, mapEventToDb));
 }
 
 export async function upsertScheduledEvent(event: ScheduledEvent) {
