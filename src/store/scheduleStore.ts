@@ -504,9 +504,9 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       scheduledEvents: updatedEvents,
     });
 
-    // Save to Supabase
-    saveExams(updatedExams);
-    saveScheduledEvents(updatedEvents);
+    // Save to Supabase (queue serializes: exams upsert before plan upsert)
+    track('Prüfungen', saveExams(updatedExams));
+    track('Plan', saveScheduledEvents(updatedEvents));
 
     return { mergedExam, mergedEvent, movedEvents };
   },
