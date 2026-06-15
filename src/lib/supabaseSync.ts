@@ -370,14 +370,27 @@ export async function loadAllFromSupabase() {
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-export async function saveStaff(staff: StaffMember[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'staff', neqId: NIL_UUID },
-  ];
-  if (staff.length > 0) {
-    ops.push({ kind: 'upsert', table: 'staff', rows: staff.map(mapStaffToDb) });
+// Build "upsert all rows, then delete everything not in the new id set" ops.
+// Order matters: upsert FIRST so a half-applied save never leaves the table
+// empty if the delete succeeds but the upsert fails.
+function buildSyncOps<T extends { id: string }>(
+  table: string,
+  rows: T[],
+  toDb: (row: T) => Record<string, unknown>,
+): AdminOp[] {
+  const ops: AdminOp[] = [];
+  if (rows.length > 0) {
+    ops.push({ kind: 'upsert', table, rows: rows.map(toDb) });
+    ops.push({ kind: 'delete', table, notInIds: rows.map((r) => r.id) });
+  } else {
+    // No rows left → wipe the table.
+    ops.push({ kind: 'delete', table, neqId: NIL_UUID });
   }
-  await adminWrite(ops);
+  return ops;
+}
+
+export async function saveStaff(staff: StaffMember[]) {
+  await adminWrite(buildSyncOps('staff', staff, mapStaffToDb));
 }
 
 export async function updateStaffMember(staff: StaffMember) {
@@ -385,41 +398,17 @@ export async function updateStaffMember(staff: StaffMember) {
 }
 
 export async function saveExams(exams: Exam[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'exams', neqId: NIL_UUID },
-  ];
-  if (exams.length > 0) {
-    ops.push({ kind: 'upsert', table: 'exams', rows: exams.map(mapExamToDb) });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('exams', exams, mapExamToDb));
 }
 
 export async function saveRooms(rooms: Room[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'rooms', neqId: NIL_UUID },
-  ];
-  if (rooms.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'rooms',
-      rows: rooms.map((r) => ({ id: r.id, name: r.name })),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(
+    buildSyncOps('rooms', rooms, (r) => ({ id: r.id, name: r.name })),
+  );
 }
 
 export async function saveRoomMappings(mappings: RoomMapping[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'room_mappings', neqId: NIL_UUID },
-  ];
-  if (mappings.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'room_mappings',
-      rows: mappings.map(mapRoomMappingToDb),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('room_mappings', mappings, mapRoomMappingToDb));
 }
 
 export async function saveConfig(config: ScheduleConfig) {
