@@ -277,12 +277,12 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     );
     set({ scheduledEvents: updated });
     const event = updated.find((e) => e.id === eventId);
-    if (event) upsertScheduledEvent(event);
+    if (event) track('Termin', upsertScheduledEvent(event));
   },
   setConfig: (config) => {
     const updated = { ...get().config, ...config };
     set({ config: updated });
-    saveConfig(updated);
+    track('Konfiguration', saveConfig(updated));
   },
   setConflicts: (conflicts) => set({ conflicts }),
   createScheduleVersion: () => {
