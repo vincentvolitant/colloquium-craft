@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import {
   loadAllFromSupabase,
@@ -17,6 +18,17 @@ import {
   upsertExam,
 } from '@/lib/supabaseSync';
 import { setAdminPassword, clearAdminPassword } from '@/lib/adminSession';
+
+// Surface any background save failure to the user instead of swallowing it.
+// All saves are already serialized inside supabaseSync's write queue, so we
+// only need to catch errors here for visibility.
+function track(label: string, p: Promise<unknown>) {
+  p.catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${label}] save failed:`, err);
+    toast.error(`Speichern fehlgeschlagen: ${label}`, { description: msg });
+  });
+}
 
 import type {
   Exam,
