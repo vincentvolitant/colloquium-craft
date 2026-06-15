@@ -37,6 +37,7 @@ type Op =
       match?: Record<string, unknown>;
       neqId?: string; // delete all (id != neqId)
       inIds?: string[]; // delete where id in (...)
+      notInIds?: string[]; // delete where id NOT in (...) — diff delete
     };
 
 function json(body: unknown, status = 200) {
@@ -141,6 +142,18 @@ serve(async (req) => {
         }
         if (raw.inIds && raw.inIds.length > 0) {
           q = q.in("id", raw.inIds);
+        }
+        if (raw.notInIds) {
+          // Diff-delete: remove rows whose id is NOT in the provided list.
+          // Empty list is treated as "delete all rows matching the other filters".
+          if (raw.notInIds.length > 0) {
+            const list = "(" +
+              raw.notInIds
+                .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                .join(",") +
+              ")";
+            q = q.not("id", "in", list);
+          }
         }
         const { error } = await q;
         if (error) {

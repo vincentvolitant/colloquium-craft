@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import {
   loadAllFromSupabase,
@@ -17,6 +18,17 @@ import {
   upsertExam,
 } from '@/lib/supabaseSync';
 import { setAdminPassword, clearAdminPassword } from '@/lib/adminSession';
+
+// Surface any background save failure to the user instead of swallowing it.
+// All saves are already serialized inside supabaseSync's write queue, so we
+// only need to catch errors here for visibility.
+function track(label: string, p: Promise<unknown>) {
+  p.catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[${label}] save failed:`, err);
+    toast.error(`Speichern fehlgeschlagen: ${label}`, { description: msg });
+  });
+}
 
 import type {
   Exam,
@@ -162,16 +174,16 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
 
   setExams: (exams) => {
     set({ exams });
-    saveExams(exams);
+    track('Prüfungen', saveExams(exams));
   },
   addExams: (newExams) => {
     const updated = [...get().exams, ...newExams];
     set({ exams: updated });
-    saveExams(updated);
+    track('Prüfungen', saveExams(updated));
   },
   setStaff: (staff) => {
     set({ staff });
-    saveStaff(staff);
+    track('Personal', saveStaff(staff));
   },
   addOrUpdateStaff: (newStaff, resetAvailability = false) => {
     const normalizedName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -195,62 +207,62 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
 
     const updated = Array.from(existingMap.values());
     set({ staff: updated });
-    saveStaff(updated);
+    track('Personal', saveStaff(updated));
   },
   updateStaffAvailability: (staffId, override) => {
     const updated = get().staff.map((s) => (s.id === staffId ? { ...s, availabilityOverride: override } : s));
     set({ staff: updated });
     const member = updated.find((s) => s.id === staffId);
-    if (member) updateStaffMember(member);
+    if (member) track('Verfügbarkeit', updateStaffMember(member));
   },
   updateStaffProtocolStatus: (staffId, canDoProtocol) => {
-    const updated = get().staff.map((s) => 
-      s.id === staffId 
-        ? { ...s, canDoProtocol, canProtocol: s.employmentType === 'internal' && canDoProtocol } 
+    const updated = get().staff.map((s) =>
+      s.id === staffId
+        ? { ...s, canDoProtocol, canProtocol: s.employmentType === 'internal' && canDoProtocol }
         : s
     );
     set({ staff: updated });
     const member = updated.find((s) => s.id === staffId);
-    if (member) updateStaffMember(member);
+    if (member) track('Protokollstatus', updateStaffMember(member));
   },
   setRooms: (rooms) => {
     set({ rooms });
-    saveRooms(rooms);
+    track('Räume', saveRooms(rooms));
   },
   setRoomMappings: (mappings) => {
     set({ roomMappings: mappings });
-    saveRoomMappings(mappings);
+    track('Raumzuordnung', saveRoomMappings(mappings));
   },
   updateRoomMapping: (mapping) => {
     const updated = get().roomMappings.some((m) => m.id === mapping.id)
       ? get().roomMappings.map((m) => (m.id === mapping.id ? mapping : m))
       : [...get().roomMappings, mapping];
     set({ roomMappings: updated });
-    saveRoomMappings(updated);
+    track('Raumzuordnung', saveRoomMappings(updated));
   },
   setScheduledEvents: (events) => {
     set({ scheduledEvents: events });
-    saveScheduledEvents(events);
+    track('Plan', saveScheduledEvents(events));
   },
   addScheduledEvents: (newEvents) => {
     const updated = [...get().scheduledEvents, ...newEvents];
     set({ scheduledEvents: updated });
-    saveScheduledEvents(updated);
+    track('Plan', saveScheduledEvents(updated));
   },
   updateScheduledEvent: (event) => {
     const updated = get().scheduledEvents.map((e) => (e.id === event.id ? event : e));
     set({ scheduledEvents: updated });
-    upsertScheduledEvent(event);
+    track('Termin', upsertScheduledEvent(event));
   },
   removeScheduledEvents: (eventIds) => {
     const updated = get().scheduledEvents.filter((e) => !eventIds.includes(e.id));
     set({ scheduledEvents: updated });
-    deleteScheduledEvents(eventIds);
+    track('Termin löschen', deleteScheduledEvents(eventIds));
   },
   updateExam: (exam) => {
     const updated = get().exams.map((e) => (e.id === exam.id ? exam : e));
     set({ exams: updated });
-    upsertExam(exam);
+    track('Prüfung', upsertExam(exam));
   },
   cancelEvent: (eventId, reason) => {
     const updated = get().scheduledEvents.map((e) =>
@@ -265,12 +277,12 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
     );
     set({ scheduledEvents: updated });
     const event = updated.find((e) => e.id === eventId);
-    if (event) upsertScheduledEvent(event);
+    if (event) track('Termin', upsertScheduledEvent(event));
   },
   setConfig: (config) => {
     const updated = { ...get().config, ...config };
     set({ config: updated });
-    saveConfig(updated);
+    track('Konfiguration', saveConfig(updated));
   },
   setConflicts: (conflicts) => set({ conflicts }),
   createScheduleVersion: () => {
@@ -284,7 +296,7 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       scheduleVersions: updated,
       currentVersionId: newVersion.id,
     });
-    saveVersion(newVersion);
+    track('Version', saveVersion(newVersion));
     return newVersion.id;
   },
   publishVersion: async (versionId) => {
@@ -492,9 +504,9 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       scheduledEvents: updatedEvents,
     });
 
-    // Save to Supabase
-    saveExams(updatedExams);
-    saveScheduledEvents(updatedEvents);
+    // Save to Supabase (queue serializes: exams upsert before plan upsert)
+    track('Prüfungen', saveExams(updatedExams));
+    track('Plan', saveScheduledEvents(updatedEvents));
 
     return { mergedExam, mergedEvent, movedEvents };
   },

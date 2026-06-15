@@ -32,25 +32,42 @@ type AdminOp =
       match?: Record<string, unknown>;
       neqId?: string;
       inIds?: string[];
+      notInIds?: string[];
     };
 
+// ---- Serial write queue ----
+// All admin writes are funneled through one Promise chain so that two quick
+// actions (e.g. two clicks, or parallel saveExams + saveScheduledEvents) can
+// never overlap. Without this, the last UPSERT silently wins and rows from
+// the earlier snapshot get lost.
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeChain.then(fn, fn);
+  // Keep the chain alive even if a write rejects.
+  writeChain = next.catch(() => undefined);
+  return next;
+}
+
 async function adminWrite(ops: AdminOp[]): Promise<void> {
-  const password = getAdminPassword();
-  if (!password) {
-    console.error('adminWrite called without an authenticated admin session');
-    throw new Error('Nicht als Admin angemeldet');
-  }
-  const { data, error } = await supabase.functions.invoke('admin-db', {
-    body: { password, ops },
+  return enqueueWrite(async () => {
+    const password = getAdminPassword();
+    if (!password) {
+      console.error('adminWrite called without an authenticated admin session');
+      throw new Error('Nicht als Admin angemeldet');
+    }
+    const { data, error } = await supabase.functions.invoke('admin-db', {
+      body: { password, ops },
+    });
+    if (error) {
+      console.error('admin-db invocation failed:', error);
+      throw error;
+    }
+    if (!data?.success) {
+      console.error('admin-db returned error:', data?.error);
+      throw new Error(data?.error || 'Speichern fehlgeschlagen');
+    }
   });
-  if (error) {
-    console.error('admin-db invocation failed:', error);
-    throw error;
-  }
-  if (!data?.success) {
-    console.error('admin-db returned error:', data?.error);
-    throw new Error(data?.error || 'Speichern fehlgeschlagen');
-  }
 }
 
 // Columns that the public/anon role is allowed to read on `exams`.
@@ -353,14 +370,27 @@ export async function loadAllFromSupabase() {
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-export async function saveStaff(staff: StaffMember[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'staff', neqId: NIL_UUID },
-  ];
-  if (staff.length > 0) {
-    ops.push({ kind: 'upsert', table: 'staff', rows: staff.map(mapStaffToDb) });
+// Build "upsert all rows, then delete everything not in the new id set" ops.
+// Order matters: upsert FIRST so a half-applied save never leaves the table
+// empty if the delete succeeds but the upsert fails.
+function buildSyncOps<T extends { id: string }>(
+  table: string,
+  rows: T[],
+  toDb: (row: T) => Record<string, unknown>,
+): AdminOp[] {
+  const ops: AdminOp[] = [];
+  if (rows.length > 0) {
+    ops.push({ kind: 'upsert', table, rows: rows.map(toDb) });
+    ops.push({ kind: 'delete', table, notInIds: rows.map((r) => r.id) });
+  } else {
+    // No rows left → wipe the table.
+    ops.push({ kind: 'delete', table, neqId: NIL_UUID });
   }
-  await adminWrite(ops);
+  return ops;
+}
+
+export async function saveStaff(staff: StaffMember[]) {
+  await adminWrite(buildSyncOps('staff', staff, mapStaffToDb));
 }
 
 export async function updateStaffMember(staff: StaffMember) {
@@ -368,41 +398,17 @@ export async function updateStaffMember(staff: StaffMember) {
 }
 
 export async function saveExams(exams: Exam[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'exams', neqId: NIL_UUID },
-  ];
-  if (exams.length > 0) {
-    ops.push({ kind: 'upsert', table: 'exams', rows: exams.map(mapExamToDb) });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('exams', exams, mapExamToDb));
 }
 
 export async function saveRooms(rooms: Room[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'rooms', neqId: NIL_UUID },
-  ];
-  if (rooms.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'rooms',
-      rows: rooms.map((r) => ({ id: r.id, name: r.name })),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(
+    buildSyncOps('rooms', rooms, (r) => ({ id: r.id, name: r.name })),
+  );
 }
 
 export async function saveRoomMappings(mappings: RoomMapping[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'room_mappings', neqId: NIL_UUID },
-  ];
-  if (mappings.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'room_mappings',
-      rows: mappings.map(mapRoomMappingToDb),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('room_mappings', mappings, mapRoomMappingToDb));
 }
 
 export async function saveConfig(config: ScheduleConfig) {
@@ -456,17 +462,7 @@ export async function unpublishAllVersions() {
 }
 
 export async function saveScheduledEvents(events: ScheduledEvent[]) {
-  const ops: AdminOp[] = [
-    { kind: 'delete', table: 'scheduled_events', neqId: NIL_UUID },
-  ];
-  if (events.length > 0) {
-    ops.push({
-      kind: 'upsert',
-      table: 'scheduled_events',
-      rows: events.map(mapEventToDb),
-    });
-  }
-  await adminWrite(ops);
+  await adminWrite(buildSyncOps('scheduled_events', events, mapEventToDb));
 }
 
 export async function upsertScheduledEvent(event: ScheduledEvent) {
