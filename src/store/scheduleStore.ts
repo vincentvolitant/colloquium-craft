@@ -296,7 +296,7 @@ export const useScheduleStore = create<ScheduleState>()((set, get) => ({
       scheduleVersions: updated,
       currentVersionId: newVersion.id,
     });
-    saveVersion(newVersion);
+    track('Version', saveVersion(newVersion));
     return newVersion.id;
   },
   publishVersion: async (versionId) => {
