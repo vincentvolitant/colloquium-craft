@@ -32,25 +32,42 @@ type AdminOp =
       match?: Record<string, unknown>;
       neqId?: string;
       inIds?: string[];
+      notInIds?: string[];
     };
 
+// ---- Serial write queue ----
+// All admin writes are funneled through one Promise chain so that two quick
+// actions (e.g. two clicks, or parallel saveExams + saveScheduledEvents) can
+// never overlap. Without this, the last UPSERT silently wins and rows from
+// the earlier snapshot get lost.
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeChain.then(fn, fn);
+  // Keep the chain alive even if a write rejects.
+  writeChain = next.catch(() => undefined);
+  return next;
+}
+
 async function adminWrite(ops: AdminOp[]): Promise<void> {
-  const password = getAdminPassword();
-  if (!password) {
-    console.error('adminWrite called without an authenticated admin session');
-    throw new Error('Nicht als Admin angemeldet');
-  }
-  const { data, error } = await supabase.functions.invoke('admin-db', {
-    body: { password, ops },
+  return enqueueWrite(async () => {
+    const password = getAdminPassword();
+    if (!password) {
+      console.error('adminWrite called without an authenticated admin session');
+      throw new Error('Nicht als Admin angemeldet');
+    }
+    const { data, error } = await supabase.functions.invoke('admin-db', {
+      body: { password, ops },
+    });
+    if (error) {
+      console.error('admin-db invocation failed:', error);
+      throw error;
+    }
+    if (!data?.success) {
+      console.error('admin-db returned error:', data?.error);
+      throw new Error(data?.error || 'Speichern fehlgeschlagen');
+    }
   });
-  if (error) {
-    console.error('admin-db invocation failed:', error);
-    throw error;
-  }
-  if (!data?.success) {
-    console.error('admin-db returned error:', data?.error);
-    throw new Error(data?.error || 'Speichern fehlgeschlagen');
-  }
 }
 
 // Columns that the public/anon role is allowed to read on `exams`.
