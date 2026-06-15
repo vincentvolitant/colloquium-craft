@@ -37,6 +37,7 @@ type Op =
       match?: Record<string, unknown>;
       neqId?: string; // delete all (id != neqId)
       inIds?: string[]; // delete where id in (...)
+      notInIds?: string[]; // delete where id NOT in (...) — diff delete
     };
 
 function json(body: unknown, status = 200) {
