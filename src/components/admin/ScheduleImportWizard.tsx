@@ -109,8 +109,8 @@ export function ScheduleImportWizard() {
     });
     if (found) return found.id;
     
-    // Create placeholder ID
-    return `staff-${normalized.replace(/[^a-z0-9]/g, '-')}`;
+    // Not found — return empty so DB stores NULL (examiner columns are UUID).
+    return '';
   };
   
   const handleImport = () => {
