@@ -276,8 +276,8 @@ export function parseExams(
         if (found) return found.id;
         warnings.push(`Row ${rowNum}: Prüfer ${examinerNum} "${name}" not found in staff list`);
       }
-      // Create ID from name if not found - this will not match any staff
-      return `staff-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+      // Not found — return empty so DB stores NULL (UUID column rejects non-UUID strings).
+      return '';
     };
     
     const examiner1Id = findStaffId(examiner1Name, i + 2, 1);
